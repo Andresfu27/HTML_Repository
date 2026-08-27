@@ -386,6 +386,22 @@ input.qaNameInput { display: block; width: 100%; border: none; background: trans
 .qaborder-ab47bc { border-color: #ab47bc; }
 .qacolor-f4511e { background-color: #f4511e; }
 .qaborder-f4511e { border-color: #f4511e; }
+.forecastHint { font-size: 12px; color: var(--hinicio-gray-light); margin: -4px 0 10px; max-width: 640px; }
+.forecastStatusText { font-size: 12px; color: var(--hinicio-gray-light); margin: 8px 0 0; }
+.forecastStatusText.err { color: #a32d2d; }
+.ghostSmall { font-family: 'Jost', sans-serif; font-size: 11px; padding: 5px 10px; border-radius: 12px; }
+.forecastSummary { border: 1px solid var(--hinicio-cyan); background: #f6fdff; border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; }
+.forecastSummaryHead { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; flex-wrap: wrap; }
+.forecastSummaryTitle { font-family: 'Jost', sans-serif; font-weight: 600; font-size: 13px; color: var(--hinicio-navy-dark); }
+.forecastSummaryTotals { display: flex; gap: 16px; font-size: 12px; color: var(--hinicio-text); margin-bottom: 4px; flex-wrap: wrap; }
+.forecastDelta.over { color: #a32d2d; font-weight: 600; }
+.forecastDelta.under { color: #a3690a; font-weight: 600; }
+.forecastDelta.match { color: #1c7a3d; font-weight: 600; }
+.forecastTable { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 4px; }
+.forecastTable td { padding: 3px 4px; border-bottom: 1px solid #e5f4fb; }
+.forecastTable td:nth-child(2), .forecastTable td:nth-child(3) { text-align: right; white-space: nowrap; }
+.forecastTable tr.forecastRowOver td { color: #a32d2d; }
+.forecastTable tr.forecastRowUnmatched td { color: var(--hinicio-gray-light); font-style: italic; }
 </style>
 </head>
 <body>
@@ -525,6 +541,18 @@ input.qaNameInput { display: block; width: 100%; border: none; background: trans
         <input type="date" id="customEndInput">
       </div>
       <p class="syncStatus" id="syncStatus"></p>
+      <div class="forecastSummary hidden" id="forecastSummary">
+        <div class="forecastSummaryHead">
+          <span class="forecastSummaryTitle">🎯 Forecast · <span id="forecastWeekLabel"></span></span>
+          <button type="button" class="ghostSmall hidden" id="btnPrefillForecast">✨ Prefill from forecast</button>
+        </div>
+        <div class="forecastSummaryTotals">
+          <span>Forecast: <strong id="forecastTotalVal"></strong></span>
+          <span>Logged: <strong id="forecastLoggedVal"></strong></span>
+          <span class="forecastDelta" id="forecastDeltaVal"></span>
+        </div>
+        <table class="forecastTable" id="forecastTable"></table>
+      </div>
       <div id="daysContainer"></div>
     </div>
     <div id="logMainFooter">
@@ -584,6 +612,21 @@ input.qaNameInput { display: block; width: 100%; border: none; background: trans
     </div>
   </div>
   <div id="connectStatus" class="meta"></div>
+
+  <p class="sectionLabel">Weekly forecast</p>
+  <p class="forecastHint">Import the config exported from the Weekly Workload planner (its ⬇ Export Config button) to compare your logged hours against what was forecasted for you, and prefill a week from it.</p>
+  <div class="row">
+    <div class="field">
+      <label for="forecastFileInput">Forecast file</label>
+      <input type="file" id="forecastFileInput" accept=".json">
+    </div>
+    <button id="btnClearForecast" type="button">Clear forecast</button>
+  </div>
+  <div class="field hidden" id="forecastPersonField">
+    <label for="forecastPersonSelect">You, in the forecast roster</label>
+    <select id="forecastPersonSelect"></select>
+  </div>
+  <p id="forecastStatus" class="forecastStatusText">No forecast imported.</p>
 </div>
 
 <script>
@@ -605,6 +648,43 @@ if (IS_IFRAME) {
   document.getElementById('importFileInput').classList.add('hidden');
 }
 
+/* ── Role/identity detection ──
+   The email identifying the current user comes from the URL this tool's own
+   script was loaded from, e.g. .../xxxxxx/script/?email=aaa.aaa@aaa.com
+   — read as an explicit "email" query parameter first, falling back to a
+   loose regex match only if that param isn't present. Used to auto-match
+   this user against the roster in an imported Weekly Workload forecast. */
+function extractEmailFromScriptUrl() {
+  const candidates = [];
+  try {
+    if (document.currentScript && document.currentScript.src) candidates.push(document.currentScript.src);
+  } catch (e) { /* currentScript may be unavailable for inline scripts in some browsers */ }
+  candidates.push(window.location.href);
+  try { if (document.referrer) candidates.push(document.referrer); } catch (e) { /* ignore */ }
+
+  for (const url of candidates) {
+    if (!url) continue;
+    try {
+      const parsed = new URL(url, window.location.href);
+      const paramEmail = parsed.searchParams.get('email');
+      if (paramEmail) return paramEmail.trim().toLowerCase();
+    } catch (e) { /* not a parseable absolute URL, fall through to regex below */ }
+  }
+  for (const url of candidates) {
+    if (!url) continue;
+    const m = String(url).match(/[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+/);
+    if (m) return m[0].toLowerCase();
+  }
+  return null;
+}
+function extractEmail(str) {
+  if (!str) return null;
+  const m = String(str).match(/[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+/);
+  return m ? m[0].toLowerCase() : null;
+}
+const detectedEmail = extractEmailFromScriptUrl() || extractEmail(POST_CONFIG_URL) || extractEmail(POST_CONFIG_UID) || null;
+let myEmail = detectedEmail;
+
 function buildConfigJSON() {
   return {
     apiKey: document.getElementById('apiKeyInput').value,
@@ -612,7 +692,8 @@ function buildConfigJSON() {
     dayStart: document.getElementById('dayStartInput').value,
     favorites: favorites,
     days: days,
-    periods: periods
+    periods: periods,
+    forecast: forecast
   };
 }
 
@@ -620,6 +701,10 @@ function applyConfig(cfg) {
   if (!cfg || typeof cfg !== 'object' || !Object.keys(cfg).length) return;
   if (cfg.apiKey) document.getElementById('apiKeyInput').value = cfg.apiKey;
   if (cfg.dayStart) document.getElementById('dayStartInput').value = cfg.dayStart;
+  if (cfg.forecast && typeof cfg.forecast === 'object') {
+    forecast = cfg.forecast;
+    renderForecastStatus();
+  }
   if (Array.isArray(cfg.favorites)) {
     favorites = cfg.favorites;
     renderSidebar();
@@ -645,6 +730,265 @@ function applyConfig(cfg) {
     connectToClockify();
   }
 }
+
+// ── Weekly forecast (imported from the Weekly Workload planner) ──
+//
+// The planner exports {roster, projects, weeks, ...}. Each week holds, per
+// project, an { early: {[personCode]: hours}, flex: {[personCode]: hours} }
+// map — the two buckets together are that person's forecasted hours on that
+// project for the week. This section matches "me" (by email, or a manual
+// pick) against that roster, reduces the export down to just my per-week,
+// per-project forecasted hours, and renders it against what's actually
+// logged so it can be compared or used to prefill a week.
+
+function findForecastRosterMatch(roster) {
+  if (!myEmail) return null;
+  const hit = (roster || []).find(function (r) { return r.email && r.email.toLowerCase() === myEmail.toLowerCase(); });
+  return hit ? hit.code : null;
+}
+
+function extractForecastForPerson(raw, code) {
+  const projectsById = {};
+  (raw.projects || []).forEach(function (p) { if (!p.archived) projectsById[p.id] = p; });
+  const weeks = {};
+  Object.keys(raw.weeks || {}).forEach(function (weekId) {
+    const w = raw.weeks[weekId];
+    if (!w || !w.weekStartISO || !w.hours) return;
+    const rows = [];
+    let total = 0;
+    Object.keys(w.hours).forEach(function (projId) {
+      const proj = projectsById[projId];
+      if (!proj || !proj.name) return;
+      const bucket = w.hours[projId] || {};
+      const hours = (Number((bucket.early || {})[code]) || 0) + (Number((bucket.flex || {})[code]) || 0);
+      if (hours > 0) { rows.push({ name: proj.name, hours: hours }); total += hours; }
+    });
+    if (rows.length) weeks[w.weekStartISO] = { label: w.label || w.weekStartISO, projects: rows, total: total };
+  });
+  return weeks;
+}
+
+function applyForecastForCode(code) {
+  if (!_importedForecastRaw || !code) {
+    forecast = null;
+  } else {
+    const person = (_importedForecastRaw.roster || []).find(function (r) { return r.code === code; });
+    forecast = {
+      personCode: code,
+      personName: person ? (person.name || code) : code,
+      importedAt: new Date().toISOString(),
+      weeks: extractForecastForPerson(_importedForecastRaw, code)
+    };
+  }
+  renderForecastStatus();
+  renderForecastSummary();
+  updateSaveButtonDirtyState();
+}
+
+function populateForecastPersonSelect(roster, matchedCode) {
+  const select = document.getElementById('forecastPersonSelect');
+  select.innerHTML = '';
+  const blank = document.createElement('option');
+  blank.value = '';
+  blank.textContent = '— select yourself —';
+  select.appendChild(blank);
+  roster.filter(function (r) { return !r.hidden; }).forEach(function (r) {
+    const opt = document.createElement('option');
+    opt.value = r.code;
+    opt.textContent = r.name + (r.email ? ' (' + r.email + ')' : '');
+    select.appendChild(opt);
+  });
+  select.value = matchedCode || '';
+  document.getElementById('forecastPersonField').classList.remove('hidden');
+  applyForecastForCode(select.value || null);
+}
+
+document.getElementById('forecastFileInput').addEventListener('change', function (e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const status = document.getElementById('forecastStatus');
+  const reader = new FileReader();
+  reader.addEventListener('load', function (ev) {
+    try {
+      const raw = JSON.parse(ev.target.result);
+      if (!raw || !Array.isArray(raw.roster) || !Array.isArray(raw.projects) || !raw.weeks || typeof raw.weeks !== 'object') {
+        throw new Error("This doesn't look like a Weekly Workload export.");
+      }
+      _importedForecastRaw = raw;
+      status.classList.remove('err');
+      populateForecastPersonSelect(raw.roster, findForecastRosterMatch(raw.roster));
+    } catch (err) {
+      status.textContent = 'Import error: ' + err.message;
+      status.classList.add('err');
+    }
+  });
+  reader.readAsText(file);
+  e.target.value = '';
+});
+
+document.getElementById('forecastPersonSelect').addEventListener('change', function (e) {
+  applyForecastForCode(e.target.value || null);
+});
+
+document.getElementById('btnClearForecast').addEventListener('click', function () {
+  forecast = null;
+  _importedForecastRaw = null;
+  document.getElementById('forecastPersonField').classList.add('hidden');
+  document.getElementById('forecastPersonSelect').innerHTML = '';
+  renderForecastStatus();
+  renderForecastSummary();
+  updateSaveButtonDirtyState();
+});
+
+function renderForecastStatus() {
+  const status = document.getElementById('forecastStatus');
+  status.classList.remove('err');
+  if (!forecast) { status.textContent = 'No forecast imported.'; return; }
+  const weekCount = Object.keys(forecast.weeks).length;
+  status.textContent = 'Loaded forecast for ' + forecast.personName + ' — ' + weekCount + ' week(s) with hours.';
+}
+
+// A forecast week is keyed by its Monday (weekStartISO from the planner,
+// same "YYYY-MM-DD" shape as dateKey here) — only the Monday-aligned,
+// 7-day period views (this/next/past week) can line up with one.
+function currentWeekKeyIfAligned() {
+  const dates = getPeriodDates();
+  if (dates.length !== 7 || dates[0].getDay() !== 1) return null;
+  return dateKey(dates[0]);
+}
+
+function loggedMinutesForWeek(dates) {
+  if (periodBarMode) return ensurePeriod(dateKey(dates[0])).segments.reduce(function (a, s) { return a + s.minutes; }, 0);
+  return dates.reduce(function (a, d) {
+    return a + ensureDay(dateKey(d)).segments.reduce(function (a2, s) { return a2 + s.minutes; }, 0);
+  }, 0);
+}
+
+function projectNameForSegment(seg) {
+  const p = projects.find(function (pr) { return pr.id === seg.projectId; });
+  return p ? p.name : seg.projectCode;
+}
+
+function loggedHoursByProjectForWeek(dates) {
+  const map = {};
+  const add = function (segs) {
+    segs.forEach(function (s) {
+      const name = projectNameForSegment(s);
+      map[name] = (map[name] || 0) + s.minutes / 60;
+    });
+  };
+  if (periodBarMode) add(ensurePeriod(dateKey(dates[0])).segments);
+  else dates.forEach(function (d) { add(ensureDay(dateKey(d)).segments); });
+  return map;
+}
+
+function renderForecastSummary() {
+  const wrap = document.getElementById('forecastSummary');
+  const weekKey = currentWeekKeyIfAligned();
+  const weekForecast = forecast && weekKey ? forecast.weeks[weekKey] : null;
+  if (!weekForecast) { wrap.classList.add('hidden'); return; }
+  wrap.classList.remove('hidden');
+
+  document.getElementById('forecastWeekLabel').textContent = weekForecast.label;
+
+  const dates = getPeriodDates();
+  const loggedMinutes = loggedMinutesForWeek(dates);
+  const forecastMinutes = Math.round(weekForecast.total * 60);
+
+  document.getElementById('forecastTotalVal').textContent = fmtHours(forecastMinutes);
+  document.getElementById('forecastLoggedVal').textContent = fmtHours(loggedMinutes);
+
+  const deltaEl = document.getElementById('forecastDeltaVal');
+  const deltaMinutes = loggedMinutes - forecastMinutes;
+  deltaEl.classList.remove('over', 'under', 'match');
+  if (Math.abs(deltaMinutes) < 3) {
+    deltaEl.textContent = 'On target ✓';
+    deltaEl.classList.add('match');
+  } else if (deltaMinutes > 0) {
+    deltaEl.textContent = fmtHours(deltaMinutes) + ' over';
+    deltaEl.classList.add('over');
+  } else {
+    deltaEl.textContent = fmtHours(-deltaMinutes) + ' under';
+    deltaEl.classList.add('under');
+  }
+
+  const loggedByProject = loggedHoursByProjectForWeek(dates);
+  const table = document.getElementById('forecastTable');
+  table.innerHTML = '';
+  const seen = {};
+  weekForecast.projects.forEach(function (row) {
+    seen[row.name] = true;
+    const matched = projects.some(function (p) { return p.name === row.name; });
+    const logged = loggedByProject[row.name] || 0;
+    const tr = document.createElement('tr');
+    const classes = [];
+    if (logged * 60 > Math.round(row.hours * 60) + 2) classes.push('forecastRowOver');
+    if (!matched) classes.push('forecastRowUnmatched');
+    tr.className = classes.join(' ');
+    const tdName = document.createElement('td');
+    tdName.textContent = row.name + (matched ? '' : ' (not in this workspace)');
+    const tdForecast = document.createElement('td');
+    tdForecast.textContent = fmtHours(Math.round(row.hours * 60));
+    const tdLogged = document.createElement('td');
+    tdLogged.textContent = fmtHours(Math.round(logged * 60));
+    tr.appendChild(tdName); tr.appendChild(tdForecast); tr.appendChild(tdLogged);
+    table.appendChild(tr);
+  });
+  Object.keys(loggedByProject).forEach(function (name) {
+    if (seen[name]) return;
+    const tr = document.createElement('tr');
+    const tdName = document.createElement('td');
+    tdName.textContent = name;
+    const tdForecast = document.createElement('td');
+    tdForecast.textContent = '—';
+    const tdLogged = document.createElement('td');
+    tdLogged.textContent = fmtHours(Math.round(loggedByProject[name] * 60));
+    tr.appendChild(tdName); tr.appendChild(tdForecast); tr.appendChild(tdLogged);
+    table.appendChild(tr);
+  });
+
+  const prefillBtn = document.getElementById('btnPrefillForecast');
+  const missing = weekForecast.projects.filter(function (row) {
+    return projects.some(function (p) { return p.name === row.name; }) && !(loggedByProject[row.name] > 0);
+  });
+  const locked = periodBarMode
+    ? ensurePeriod(dateKey(dates[0])).locked
+    : dates.every(function (d) { return ensureDay(dateKey(d)).locked; });
+  prefillBtn.classList.toggle('hidden', missing.length === 0 || locked);
+}
+
+document.getElementById('btnPrefillForecast').addEventListener('click', function () {
+  const weekKey = currentWeekKeyIfAligned();
+  const weekForecast = forecast && weekKey ? forecast.weeks[weekKey] : null;
+  if (!weekForecast) return;
+  if (!periodBarMode) {
+    // Switch to period-bar mode and rebuild the DOM as a single period card
+    // *before* adding segments — addSegment('period', ...) below renders
+    // straight into the existing card for `weekKey`, which up to now was a
+    // day card (kind="day") sharing the same date key (the Monday).
+    periodBarMode = true;
+    document.getElementById('weekBarCheckbox').checked = true;
+    renderPeriod();
+  }
+  const existing = ensurePeriod(weekKey).segments;
+  weekForecast.projects.forEach(function (row) {
+    const already = existing.some(function (s) { return projectNameForSegment(s) === row.name; });
+    if (already) return;
+    const project = projects.find(function (p) { return p.name === row.name; });
+    if (!project) return; // not in this workspace — left as an unmatched row in the table instead
+    const info = projectDisplay(project);
+    const payload = {
+      projectId: project.id,
+      projectCode: info.parsed ? info.parsed.full : project.name,
+      projectDesc: info.desc,
+      taskId: null,
+      taskName: null
+    };
+    addSegment('period', weekKey, payload, Math.round(row.hours * 60));
+  });
+  renderPeriod();
+  syncPeriodFromClockify(getPeriodDates());
+});
 
 let _lastSavedSnapshot = null;
 
@@ -760,6 +1104,13 @@ let periodBarMode = false;
 let days = {};
 let periods = {};
 let undoStack = [];
+// forecast: { personCode, personName, importedAt, weeks: { [weekStartISO]: { label, projects: [{name, hours}], total } } }
+// — the lean, per-person slice extracted from a Weekly Workload export; this
+// is what actually gets saved. The raw export (_importedForecastRaw) is kept
+// only in memory for this session so switching the person-picker can re-derive
+// it without re-uploading the file.
+let forecast = null;
+let _importedForecastRaw = null;
 
 // Snapshots a day/period container before a mutation so a single click on the
 // Undo button can restore it — used instead of forcing the whole task entry
@@ -2062,6 +2413,11 @@ function renderContainer(kind, key) {
   } else {
     sizeBtn.textContent = autoSize.label + ' · ' + fmtMin(obj.targetMinutes);
   }
+
+  // Every segment mutation funnels through here (add/remove/drag, and the
+  // Clockify sync's renderPeriod()), so this is the single choke point to
+  // keep the forecast-vs-logged comparison above the days list current.
+  renderForecastSummary();
 }
 
 let segDragIndex = null;
