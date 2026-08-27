@@ -386,13 +386,12 @@ input.qaNameInput { display: block; width: 100%; border: none; background: trans
 .qaborder-ab47bc { border-color: #ab47bc; }
 .qacolor-f4511e { background-color: #f4511e; }
 .qaborder-f4511e { border-color: #f4511e; }
-.forecastHint { font-size: 12px; color: var(--hinicio-gray-light); margin: -4px 0 10px; max-width: 640px; }
-.forecastStatusText { font-size: 12px; color: var(--hinicio-gray-light); margin: 8px 0 0; }
-.forecastStatusText.err { color: #a32d2d; }
 .ghostSmall { font-family: 'Jost', sans-serif; font-size: 11px; padding: 5px 10px; border-radius: 12px; }
 .forecastSummary { border: 1px solid var(--hinicio-cyan); background: #f6fdff; border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; }
 .forecastSummaryHead { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; flex-wrap: wrap; }
 .forecastSummaryTitle { font-family: 'Jost', sans-serif; font-weight: 600; font-size: 13px; color: var(--hinicio-navy-dark); }
+.forecastSummaryActions { display: flex; gap: 6px; align-items: center; }
+.forecastBody { font-size: 12px; color: var(--hinicio-gray-light); margin: 0 0 4px; }
 .forecastSummaryTotals { display: flex; gap: 16px; font-size: 12px; color: var(--hinicio-text); margin-bottom: 4px; flex-wrap: wrap; }
 .forecastDelta.over { color: #a32d2d; font-weight: 600; }
 .forecastDelta.under { color: #a3690a; font-weight: 600; }
@@ -544,9 +543,13 @@ input.qaNameInput { display: block; width: 100%; border: none; background: trans
       <div class="forecastSummary hidden" id="forecastSummary">
         <div class="forecastSummaryHead">
           <span class="forecastSummaryTitle">🎯 Forecast · <span id="forecastWeekLabel"></span></span>
-          <button type="button" class="ghostSmall hidden" id="btnPrefillForecast">✨ Prefill from forecast</button>
+          <span class="forecastSummaryActions">
+            <button type="button" class="ghostSmall hidden" id="btnRefreshForecast" title="Re-fetch from Clockify Scheduling">🔄</button>
+            <button type="button" class="ghostSmall hidden" id="btnPrefillForecast">✨ Prefill from forecast</button>
+          </span>
         </div>
-        <div class="forecastSummaryTotals">
+        <p class="forecastBody" id="forecastBody"></p>
+        <div class="forecastSummaryTotals hidden" id="forecastTotalsRow">
           <span>Forecast: <strong id="forecastTotalVal"></strong></span>
           <span>Logged: <strong id="forecastLoggedVal"></strong></span>
           <span class="forecastDelta" id="forecastDeltaVal"></span>
@@ -612,21 +615,6 @@ input.qaNameInput { display: block; width: 100%; border: none; background: trans
     </div>
   </div>
   <div id="connectStatus" class="meta"></div>
-
-  <p class="sectionLabel">Weekly forecast</p>
-  <p class="forecastHint">Import the config exported from the Weekly Workload planner (its ⬇ Export Config button) to compare your logged hours against what was forecasted for you, and prefill a week from it.</p>
-  <div class="row">
-    <div class="field">
-      <label for="forecastFileInput">Forecast file</label>
-      <input type="file" id="forecastFileInput" accept=".json">
-    </div>
-    <button id="btnClearForecast" type="button">Clear forecast</button>
-  </div>
-  <div class="field hidden" id="forecastPersonField">
-    <label for="forecastPersonSelect">You, in the forecast roster</label>
-    <select id="forecastPersonSelect"></select>
-  </div>
-  <p id="forecastStatus" class="forecastStatusText">No forecast imported.</p>
 </div>
 
 <script>
@@ -648,43 +636,6 @@ if (IS_IFRAME) {
   document.getElementById('importFileInput').classList.add('hidden');
 }
 
-/* ── Role/identity detection ──
-   The email identifying the current user comes from the URL this tool's own
-   script was loaded from, e.g. .../xxxxxx/script/?email=aaa.aaa@aaa.com
-   — read as an explicit "email" query parameter first, falling back to a
-   loose regex match only if that param isn't present. Used to auto-match
-   this user against the roster in an imported Weekly Workload forecast. */
-function extractEmailFromScriptUrl() {
-  const candidates = [];
-  try {
-    if (document.currentScript && document.currentScript.src) candidates.push(document.currentScript.src);
-  } catch (e) { /* currentScript may be unavailable for inline scripts in some browsers */ }
-  candidates.push(window.location.href);
-  try { if (document.referrer) candidates.push(document.referrer); } catch (e) { /* ignore */ }
-
-  for (const url of candidates) {
-    if (!url) continue;
-    try {
-      const parsed = new URL(url, window.location.href);
-      const paramEmail = parsed.searchParams.get('email');
-      if (paramEmail) return paramEmail.trim().toLowerCase();
-    } catch (e) { /* not a parseable absolute URL, fall through to regex below */ }
-  }
-  for (const url of candidates) {
-    if (!url) continue;
-    const m = String(url).match(/[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+/);
-    if (m) return m[0].toLowerCase();
-  }
-  return null;
-}
-function extractEmail(str) {
-  if (!str) return null;
-  const m = String(str).match(/[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+/);
-  return m ? m[0].toLowerCase() : null;
-}
-const detectedEmail = extractEmailFromScriptUrl() || extractEmail(POST_CONFIG_URL) || extractEmail(POST_CONFIG_UID) || null;
-let myEmail = detectedEmail;
-
 function buildConfigJSON() {
   return {
     apiKey: document.getElementById('apiKeyInput').value,
@@ -692,8 +643,7 @@ function buildConfigJSON() {
     dayStart: document.getElementById('dayStartInput').value,
     favorites: favorites,
     days: days,
-    periods: periods,
-    forecast: forecast
+    periods: periods
   };
 }
 
@@ -701,10 +651,6 @@ function applyConfig(cfg) {
   if (!cfg || typeof cfg !== 'object' || !Object.keys(cfg).length) return;
   if (cfg.apiKey) document.getElementById('apiKeyInput').value = cfg.apiKey;
   if (cfg.dayStart) document.getElementById('dayStartInput').value = cfg.dayStart;
-  if (cfg.forecast && typeof cfg.forecast === 'object') {
-    forecast = cfg.forecast;
-    renderForecastStatus();
-  }
   if (Array.isArray(cfg.favorites)) {
     favorites = cfg.favorites;
     renderSidebar();
@@ -731,131 +677,98 @@ function applyConfig(cfg) {
   }
 }
 
-// ── Weekly forecast (imported from the Weekly Workload planner) ──
+// ── Weekly forecast (live from Clockify's own Scheduling feature) ──
 //
-// The planner exports {roster, projects, weeks, ...}. Each week holds, per
-// project, an { early: {[personCode]: hours}, flex: {[personCode]: hours} }
-// map — the two buckets together are that person's forecasted hours on that
-// project for the week. This section matches "me" (by email, or a manual
-// pick) against that roster, reduces the export down to just my per-week,
-// per-project forecasted hours, and renders it against what's actually
-// logged so it can be compared or used to prefill a week.
+// Clockify Scheduling assignments — the same feature the Weekly Workload
+// planner itself reads to build its forecast — are the source here too, so
+// this reads them directly with the API key/workspace already connected
+// above. No file to export/import and no dependency on that planner's own
+// saved data: just this person's real scheduled hours per project for a
+// given week, fetched on demand and cached in memory for the session.
 
-function findForecastRosterMatch(roster) {
-  if (!myEmail) return null;
-  const hit = (roster || []).find(function (r) { return r.email && r.email.toLowerCase() === myEmail.toLowerCase(); });
-  return hit ? hit.code : null;
-}
-
-function extractForecastForPerson(raw, code) {
-  const projectsById = {};
-  (raw.projects || []).forEach(function (p) { if (!p.archived) projectsById[p.id] = p; });
-  const weeks = {};
-  Object.keys(raw.weeks || {}).forEach(function (weekId) {
-    const w = raw.weeks[weekId];
-    if (!w || !w.weekStartISO || !w.hours) return;
-    const rows = [];
-    let total = 0;
-    Object.keys(w.hours).forEach(function (projId) {
-      const proj = projectsById[projId];
-      if (!proj || !proj.name) return;
-      const bucket = w.hours[projId] || {};
-      const hours = (Number((bucket.early || {})[code]) || 0) + (Number((bucket.flex || {})[code]) || 0);
-      if (hours > 0) { rows.push({ name: proj.name, hours: hours }); total += hours; }
-    });
-    if (rows.length) weeks[w.weekStartISO] = { label: w.label || w.weekStartISO, projects: rows, total: total };
-  });
-  return weeks;
-}
-
-function applyForecastForCode(code) {
-  if (!_importedForecastRaw || !code) {
-    forecast = null;
-  } else {
-    const person = (_importedForecastRaw.roster || []).find(function (r) { return r.code === code; });
-    forecast = {
-      personCode: code,
-      personName: person ? (person.name || code) : code,
-      importedAt: new Date().toISOString(),
-      weeks: extractForecastForPerson(_importedForecastRaw, code)
-    };
-  }
-  renderForecastStatus();
-  renderForecastSummary();
-  updateSaveButtonDirtyState();
-}
-
-function populateForecastPersonSelect(roster, matchedCode) {
-  const select = document.getElementById('forecastPersonSelect');
-  select.innerHTML = '';
-  const blank = document.createElement('option');
-  blank.value = '';
-  blank.textContent = '— select yourself —';
-  select.appendChild(blank);
-  roster.filter(function (r) { return !r.hidden; }).forEach(function (r) {
-    const opt = document.createElement('option');
-    opt.value = r.code;
-    opt.textContent = r.name + (r.email ? ' (' + r.email + ')' : '');
-    select.appendChild(opt);
-  });
-  select.value = matchedCode || '';
-  document.getElementById('forecastPersonField').classList.remove('hidden');
-  applyForecastForCode(select.value || null);
-}
-
-document.getElementById('forecastFileInput').addEventListener('change', function (e) {
-  const file = e.target.files[0];
-  if (!file) return;
-  const status = document.getElementById('forecastStatus');
-  const reader = new FileReader();
-  reader.addEventListener('load', function (ev) {
-    try {
-      const raw = JSON.parse(ev.target.result);
-      if (!raw || !Array.isArray(raw.roster) || !Array.isArray(raw.projects) || !raw.weeks || typeof raw.weeks !== 'object') {
-        throw new Error("This doesn't look like a Weekly Workload export.");
-      }
-      _importedForecastRaw = raw;
-      status.classList.remove('err');
-      populateForecastPersonSelect(raw.roster, findForecastRosterMatch(raw.roster));
-    } catch (err) {
-      status.textContent = 'Import error: ' + err.message;
-      status.classList.add('err');
-    }
-  });
-  reader.readAsText(file);
-  e.target.value = '';
-});
-
-document.getElementById('forecastPersonSelect').addEventListener('change', function (e) {
-  applyForecastForCode(e.target.value || null);
-});
-
-document.getElementById('btnClearForecast').addEventListener('click', function () {
-  forecast = null;
-  _importedForecastRaw = null;
-  document.getElementById('forecastPersonField').classList.add('hidden');
-  document.getElementById('forecastPersonSelect').innerHTML = '';
-  renderForecastStatus();
-  renderForecastSummary();
-  updateSaveButtonDirtyState();
-});
-
-function renderForecastStatus() {
-  const status = document.getElementById('forecastStatus');
-  status.classList.remove('err');
-  if (!forecast) { status.textContent = 'No forecast imported.'; return; }
-  const weekCount = Object.keys(forecast.weeks).length;
-  status.textContent = 'Loaded forecast for ' + forecast.personName + ' — ' + weekCount + ' week(s) with hours.';
-}
-
-// A forecast week is keyed by its Monday (weekStartISO from the planner,
-// same "YYYY-MM-DD" shape as dateKey here) — only the Monday-aligned,
-// 7-day period views (this/next/past week) can line up with one.
+// A forecast week is keyed by its Monday ("YYYY-MM-DD", same shape as
+// dateKey) — only the Monday-aligned, 7-day period views (this/next/past
+// week) can line up with one.
 function currentWeekKeyIfAligned() {
   const dates = getPeriodDates();
   if (dates.length !== 7 || dates[0].getDay() !== 1) return null;
   return dateKey(dates[0]);
 }
+
+// Formats a Date's calendar day as "YYYY-MM-DDT00:00:00Z" — a literal "Z"
+// tacked onto the local calendar date, not a real UTC conversion — so the
+// window asked for lines up with the plain calendar week shown here.
+function isoUtcMidnight(d) {
+  const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0');
+  return y + '-' + m + '-' + day + 'T00:00:00Z';
+}
+
+// A scheduling assignment's period can span more than this one week (or
+// less, e.g. a mid-week start) — this restricts it to Mon–Fri and clamps it
+// to the [globalStart, globalEnd] window before counting workdays.
+function clockifyOverlapWeekdays(periodStartIso, periodEndIso, globalStart, globalEnd) {
+  const periodStart = new Date(periodStartIso);
+  const periodEnd = new Date(periodEndIso);
+  const effStart = periodStart > globalStart ? periodStart : globalStart;
+  const effEnd = periodEnd < globalEnd ? periodEnd : globalEnd;
+  if (effStart > effEnd) return 0;
+  let count = 0;
+  const cur = new Date(Date.UTC(effStart.getUTCFullYear(), effStart.getUTCMonth(), effStart.getUTCDate()));
+  const end = new Date(Date.UTC(effEnd.getUTCFullYear(), effEnd.getUTCMonth(), effEnd.getUTCDate()));
+  while (cur <= end) {
+    const day = cur.getUTCDay(); // 0=Sun..6=Sat
+    if (day >= 1 && day <= 5) count++;
+    cur.setUTCDate(cur.getUTCDate() + 1);
+  }
+  return count;
+}
+
+// forecastCache: { [weekKey]: { status: 'loading'|'ready'|'error', label, projects: [{name, hours}], total, error } }
+// — populated on demand by renderForecastSummary() below, one fetch per week
+// per connection; cleared whenever the workspace/user connection changes.
+let forecastCache = {};
+
+async function fetchForecastForWeek(monday) {
+  const wsId = document.getElementById('workspaceSelect').value;
+  const friday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 4);
+  const startIso = isoUtcMidnight(monday), endIso = isoUtcMidnight(friday);
+  const globalStart = new Date(startIso), globalEnd = new Date(endIso);
+  const url = CLOCKIFY_BASE + '/workspaces/' + wsId + '/scheduling/assignments/all/?start=' + encodeURIComponent(startIso) + '&end=' + encodeURIComponent(endIso);
+  const assignments = await fetchAllPages(url);
+  const byProject = {};
+  let total = 0;
+  assignments.forEach(function (a) {
+    if (a.userId !== currentUserId) return;
+    const period = a.period || {};
+    if (!period.start || !period.end || !a.projectName) return;
+    const days = clockifyOverlapWeekdays(period.start, period.end, globalStart, globalEnd);
+    const hours = days * (Number(a.hoursPerDay) || 0);
+    if (!hours) return;
+    byProject[a.projectName] = (byProject[a.projectName] || 0) + hours;
+    total += hours;
+  });
+  const rows = Object.keys(byProject).map(function (name) { return { name: name, hours: byProject[name] }; });
+  rows.sort(function (a, b) { return b.hours - a.hours; });
+  return { label: dayLabel(monday) + ' – ' + dayLabel(friday), projects: rows, total: total };
+}
+
+function loadForecastForWeek(weekKey, monday) {
+  forecastCache[weekKey] = { status: 'loading' };
+  fetchForecastForWeek(monday).then(function (result) {
+    forecastCache[weekKey] = Object.assign({ status: 'ready' }, result);
+    renderForecastSummary();
+  }).catch(function (err) {
+    forecastCache[weekKey] = { status: 'error', error: err.message };
+    renderForecastSummary();
+  });
+}
+
+document.getElementById('btnRefreshForecast').addEventListener('click', function () {
+  const weekKey = currentWeekKeyIfAligned();
+  if (!weekKey) return;
+  delete forecastCache[weekKey];
+  renderForecastSummary();
+});
 
 function loggedMinutesForWeek(dates) {
   if (periodBarMode) return ensurePeriod(dateKey(dates[0])).segments.reduce(function (a, s) { return a + s.minutes; }, 0);
@@ -885,15 +798,48 @@ function loggedHoursByProjectForWeek(dates) {
 function renderForecastSummary() {
   const wrap = document.getElementById('forecastSummary');
   const weekKey = currentWeekKeyIfAligned();
-  const weekForecast = forecast && weekKey ? forecast.weeks[weekKey] : null;
-  if (!weekForecast) { wrap.classList.add('hidden'); return; }
+  if (!weekKey) { wrap.classList.add('hidden'); return; }
   wrap.classList.remove('hidden');
 
-  document.getElementById('forecastWeekLabel').textContent = weekForecast.label;
-
+  const body = document.getElementById('forecastBody');
+  const totalsRow = document.getElementById('forecastTotalsRow');
+  const table = document.getElementById('forecastTable');
+  const refreshBtn = document.getElementById('btnRefreshForecast');
+  const prefillBtn = document.getElementById('btnPrefillForecast');
+  const wsId = document.getElementById('workspaceSelect').value;
   const dates = getPeriodDates();
+
+  if (!wsId || !currentUserId) {
+    document.getElementById('forecastWeekLabel').textContent = dayLabel(dates[0]) + ' – ' + dayLabel(dates[6]);
+    body.textContent = 'Connect to Clockify above to load your forecasted hours for this week.';
+    body.classList.remove('hidden');
+    totalsRow.classList.add('hidden');
+    table.innerHTML = '';
+    refreshBtn.classList.add('hidden');
+    prefillBtn.classList.add('hidden');
+    return;
+  }
+
+  let entry = forecastCache[weekKey];
+  if (!entry) { loadForecastForWeek(weekKey, dates[0]); entry = forecastCache[weekKey]; }
+  refreshBtn.classList.remove('hidden');
+
+  if (entry.status !== 'ready') {
+    document.getElementById('forecastWeekLabel').textContent = dayLabel(dates[0]) + ' – ' + dayLabel(dates[6]);
+    body.textContent = entry.status === 'loading' ? 'Loading forecast from Clockify Scheduling…' : ('Could not load forecast: ' + entry.error);
+    body.classList.remove('hidden');
+    totalsRow.classList.add('hidden');
+    table.innerHTML = '';
+    prefillBtn.classList.add('hidden');
+    return;
+  }
+
+  body.classList.add('hidden');
+  totalsRow.classList.remove('hidden');
+  document.getElementById('forecastWeekLabel').textContent = entry.label;
+
   const loggedMinutes = loggedMinutesForWeek(dates);
-  const forecastMinutes = Math.round(weekForecast.total * 60);
+  const forecastMinutes = Math.round(entry.total * 60);
 
   document.getElementById('forecastTotalVal').textContent = fmtHours(forecastMinutes);
   document.getElementById('forecastLoggedVal').textContent = fmtHours(loggedMinutes);
@@ -913,10 +859,9 @@ function renderForecastSummary() {
   }
 
   const loggedByProject = loggedHoursByProjectForWeek(dates);
-  const table = document.getElementById('forecastTable');
   table.innerHTML = '';
   const seen = {};
-  weekForecast.projects.forEach(function (row) {
+  entry.projects.forEach(function (row) {
     seen[row.name] = true;
     const matched = projects.some(function (p) { return p.name === row.name; });
     const logged = loggedByProject[row.name] || 0;
@@ -947,8 +892,7 @@ function renderForecastSummary() {
     table.appendChild(tr);
   });
 
-  const prefillBtn = document.getElementById('btnPrefillForecast');
-  const missing = weekForecast.projects.filter(function (row) {
+  const missing = entry.projects.filter(function (row) {
     return projects.some(function (p) { return p.name === row.name; }) && !(loggedByProject[row.name] > 0);
   });
   const locked = periodBarMode
@@ -959,8 +903,8 @@ function renderForecastSummary() {
 
 document.getElementById('btnPrefillForecast').addEventListener('click', function () {
   const weekKey = currentWeekKeyIfAligned();
-  const weekForecast = forecast && weekKey ? forecast.weeks[weekKey] : null;
-  if (!weekForecast) return;
+  const entry = weekKey ? forecastCache[weekKey] : null;
+  if (!entry || entry.status !== 'ready') return;
   if (!periodBarMode) {
     // Switch to period-bar mode and rebuild the DOM as a single period card
     // *before* adding segments — addSegment('period', ...) below renders
@@ -971,7 +915,7 @@ document.getElementById('btnPrefillForecast').addEventListener('click', function
     renderPeriod();
   }
   const existing = ensurePeriod(weekKey).segments;
-  weekForecast.projects.forEach(function (row) {
+  entry.projects.forEach(function (row) {
     const already = existing.some(function (s) { return projectNameForSegment(s) === row.name; });
     if (already) return;
     const project = projects.find(function (p) { return p.name === row.name; });
@@ -1104,13 +1048,6 @@ let periodBarMode = false;
 let days = {};
 let periods = {};
 let undoStack = [];
-// forecast: { personCode, personName, importedAt, weeks: { [weekStartISO]: { label, projects: [{name, hours}], total } } }
-// — the lean, per-person slice extracted from a Weekly Workload export; this
-// is what actually gets saved. The raw export (_importedForecastRaw) is kept
-// only in memory for this session so switching the person-picker can re-derive
-// it without re-uploading the file.
-let forecast = null;
-let _importedForecastRaw = null;
 
 // Snapshots a day/period container before a mutation so a single click on the
 // Undo button can restore it — used instead of forcing the whole task entry
@@ -1551,6 +1488,7 @@ async function loadProjects() {
   projects = await fetchAllPages(CLOCKIFY_BASE + '/workspaces/' + wsId + '/projects');
   tasksByProject = {};
   pendingTaskFetches = {};
+  forecastCache = {}; // workspace/user may have changed — stale forecasts would misattribute hours
   status.textContent = 'Connected. ' + projects.length + ' project(s) loaded.';
   renderSidebar();
 }
