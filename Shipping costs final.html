@@ -1,0 +1,1470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LH2 levelized cost of shipping</title>
+<link href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600;700&family=Mulish:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --hinicio-navy: #175196;
+  --hinicio-navy-dark: #18427B;
+  --hinicio-cyan: #00ADEE;
+  --hinicio-cyan-bright: #4BD0FF;
+  --hinicio-gray: #595959;
+  --hinicio-gray-light: #7F7F7F;
+  --hinicio-text: #404040;
+  --surface-1: #F4F6F9;
+  --surface-2: #FFFFFF;
+  --border: #E2E6ED;
+  --border-strong: #C9D1DC;
+  --text-primary: #1A2233;
+  --text-secondary: #5B6472;
+  --text-muted: #94A0AF;
+  --accent-bg: #E3F6FD; --accent-text: #0B7EA8; --accent-line: #00ADEE;
+  --success-bg: #E9F7EE; --success-text: #1C7A42; --success-line: #3CAF6A;
+  --warning-bg: #FFF3E0; --warning-text: #B5680A; --warning-line: #F0A93C;
+  --purple-bg: #EFEBFB; --purple-text: #5B44B0; --purple-line: #8A78E0;
+  --pink-bg: #FDEBF3; --pink-text: #B23E75; --pink-line: #E07AA8;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; padding: 1.5rem; background: var(--surface-1); font-family: 'Mulish', sans-serif; color: var(--text-primary); display: flex; flex-direction: column; min-height: 100vh; }
+h1, h2, h3, .brandFont { font-family: 'Jost', sans-serif; font-weight: 500; }
+h2 { font-size: 19px; margin: 0 0 2px; }
+.sub { font-size: 13px; color: var(--text-secondary); margin: 0; }
+button { font-family: 'Mulish', sans-serif; cursor: pointer; }
+input, select { font-family: 'Mulish', sans-serif; }
+.hidden { display: none; }
+
+#configToolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 1rem; flex-shrink: 0; }
+#configToolbar button { background: var(--surface-2); border: 0.5px solid var(--border-strong); border-radius: 6px; padding: 6px 12px; font-size: 12px; color: var(--text-secondary); }
+#configToolbar button:hover { background: var(--surface-1); }
+#btnSendConfig { background: var(--hinicio-navy); color: #fff; border: none; }
+#btnSendConfig.dirty { box-shadow: 0 0 0 3px var(--hinicio-cyan-bright); }
+#savedPill, #errPill { font-size: 12px; padding: 5px 10px; border-radius: 6px; display: none; }
+#savedPill.show { display: inline-block; background: var(--success-bg); color: var(--success-text); }
+#errPill.show { display: inline-block; background: #FDEAEA; color: #A32D2D; }
+
+.app { display: flex; flex: 1; min-height: 0; max-width: 1120px; width: 100%; margin: 0 auto; background: var(--surface-2); border: 0.5px solid var(--border); border-radius: 16px; overflow: hidden; }
+.rail { width: 64px; flex-shrink: 0; background: var(--surface-1); border-right: 0.5px solid var(--border); display: flex; flex-direction: column; align-items: center; padding: 16px 0; gap: 10px; }
+.rail .railLogo { width: 40px; height: auto; margin-bottom: 14px; }
+.railBtn { width: 38px; height: 38px; border-radius: 10px; border: none; background: transparent; color: var(--text-muted); display: flex; align-items: center; justify-content: center; }
+.railBtn svg { width: 19px; height: 19px; }
+.railBtn:hover { background: var(--surface-2); color: var(--text-secondary); }
+.railBtn.active { background: var(--accent-bg); color: var(--accent-text); }
+
+.content { flex: 1; min-width: 0; min-height: 0; overflow-y: auto; padding: 1.5rem 1.75rem; }
+.topbar { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; margin-bottom: 1.25rem; }
+.settingsBar { display: flex; gap: 16px; background: var(--surface-1); border-radius: 10px; padding: 8px 14px; align-items: flex-end; }
+.settingField label { display: block; font-size: 10.5px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .03em; margin-bottom: 3px; }
+.settingField input { width: 60px; height: 26px; font-size: 13px; border: 0.5px solid var(--border-strong); border-radius: 6px; padding: 0 6px; background: var(--surface-2); color: var(--text-primary); }
+.noteRow { font-size: 12px; color: var(--text-muted); margin: -8px 0 1rem; }
+
+.panel {}
+.panelActions { display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 10px; }
+.btnGhost { background: var(--surface-2); border: 0.5px solid var(--border-strong); border-radius: 7px; padding: 6px 12px; font-size: 12.5px; color: var(--text-secondary); }
+.btnGhost:hover { background: var(--surface-1); }
+
+.tableWrap { overflow: auto; max-height: 480px; border: 0.5px solid var(--border); border-radius: 12px; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+thead td { padding: 9px 10px; color: var(--text-muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: .03em; background: var(--surface-1); white-space: nowrap; }
+tbody td { padding: 6px 10px; border-top: 0.5px solid var(--border); white-space: nowrap; }
+#costTable thead td { position: sticky; top: 0; z-index: 3; }
+#costTable tbody tr.dataRow td:nth-child(1) { position: sticky; left: 0; width: 36px; }
+#costTable tbody tr.dataRow td:nth-child(2) { position: sticky; left: 36px; width: 126px; }
+#costTable tbody tr.dataRow td:nth-child(3) { position: sticky; left: 162px; width: 200px; }
+#costTable tbody tr.dataRow td:nth-child(4) { position: sticky; left: 362px; width: 118px; border-right: 0.5px solid var(--border-strong); }
+#costTable thead td:nth-child(1) { position: sticky; left: 0; width: 36px; }
+#costTable thead td:nth-child(2) { position: sticky; left: 36px; width: 126px; }
+#costTable thead td:nth-child(3) { position: sticky; left: 162px; width: 200px; }
+#costTable thead td:nth-child(4) { position: sticky; left: 362px; width: 118px; border-right: 0.5px solid var(--border-strong); }
+#costTable tbody tr.dataRow td:nth-child(1), #costTable tbody tr.dataRow td:nth-child(2), #costTable tbody tr.dataRow td:nth-child(3), #costTable tbody tr.dataRow td:nth-child(4) { z-index: 2; background: var(--surface-2); }
+#costTable thead td:nth-child(1), #costTable thead td:nth-child(2), #costTable thead td:nth-child(3), #costTable thead td:nth-child(4) { z-index: 4; }
+.scalingSelect { width: 108px; height: 26px; border: 0.5px solid var(--border-strong); border-radius: 6px; padding: 0 4px; font-size: 11.5px; background: var(--surface-2); color: var(--text-primary); }
+.rowOpenBtn { color: var(--text-muted); border: none; background: none; padding: 4px; border-radius: 6px; display: flex; align-items: center; justify-content: center; }
+.rowOpenBtn:hover { background: var(--accent-bg); color: var(--accent-text); }
+.rowOpenBtn svg { width: 15px; height: 15px; }
+
+.modalOverlay { position: fixed; inset: 0; background: rgba(20, 28, 40, 0.45); display: flex; align-items: center; justify-content: center; z-index: 50; }
+.modalOverlay.hidden { display: none; }
+.modalBox { background: var(--surface-2); border-radius: 14px; padding: 20px 22px; width: 340px; max-width: 90vw; box-shadow: 0 16px 40px rgba(20, 28, 40, 0.25); }
+.modalField { margin-bottom: 12px; }
+.modalField label { display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; }
+.modalField select, .modalField input { width: 100%; height: 30px; border: 0.5px solid var(--border-strong); border-radius: 6px; padding: 0 8px; font-size: 13px; font-family: 'Mulish', sans-serif; background: var(--surface-2); color: var(--text-primary); }
+.modalRow { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.modalActions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+.modalApply { background: var(--hinicio-navy); color: #fff; border: none; border-radius: 7px; padding: 7px 14px; font-size: 13px; }
+
+.runBtnBox { display: flex; align-items: flex-end; }
+.runBtnBox .modalApply { width: 100%; height: 36px; }
+.sensTableWrap { margin-top: 1.25rem; max-height: 260px; }
+.sensTableWrap.hidden { display: none; }
+#sensTable td { text-align: right; }
+#sensTable thead td:first-child, #sensTable tbody td:first-child { text-align: left; }
+.qCell input { width: 92px; height: 28px; text-align: right; border: 0.5px solid transparent; border-radius: 6px; padding: 0 8px; font-size: 13px; background: transparent; color: var(--text-primary); }
+.qCell input:hover, .qCell input:focus { border-color: var(--border-strong); background: var(--surface-2); }
+.nameCell input { width: 170px; height: 28px; border: 0.5px solid transparent; border-radius: 6px; padding: 0 6px; font-size: 13px; background: transparent; }
+.nameCell input:hover, .nameCell input:focus { border-color: var(--border-strong); background: var(--surface-1); }
+.catBadgeInput { width: 96px; height: 26px; border: none; border-radius: 6px; padding: 0 8px; font-size: 11px; font-weight: 600; }
+.fleetBadge { display: inline-flex; align-items: center; background: var(--hinicio-navy); color: #fff; }
+.fleetLabel { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+#costTable tbody tr.shipsRow td { background: var(--surface-1); }
+#costTable tbody tr.shipsRow.dataRow td:nth-child(1), #costTable tbody tr.shipsRow.dataRow td:nth-child(2), #costTable tbody tr.shipsRow.dataRow td:nth-child(3), #costTable tbody tr.shipsRow.dataRow td:nth-child(4) { background: var(--surface-1); }
+tr.shipsRow + tr td { border-top: 1.5px solid var(--border-strong); }
+.rowDelete { color: var(--text-muted); border: none; background: none; font-size: 15px; padding: 0 4px; }
+.rowDelete:hover { color: #A32D2D; }
+.addRow td { padding: 9px 10px; color: var(--text-muted); font-size: 12.5px; cursor: pointer; }
+.addRow:hover td { color: var(--accent-text); }
+
+.grid3 { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; margin-bottom: 1.5rem; }
+.grid4 { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; margin-bottom: 1.5rem; }
+.statBox { background: var(--surface-1); border-radius: 12px; padding: 12px 14px; }
+.statBox label { display: block; font-size: 10.5px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .03em; margin-bottom: 5px; }
+.statBox input { width: 100%; height: 28px; border: 0.5px solid var(--border-strong); border-radius: 6px; padding: 0 8px; font-size: 13px; background: var(--surface-2); }
+.metricCard label { display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; }
+.metricVal { font-size: 22px; font-weight: 500; font-family: 'Jost', sans-serif; }
+.metricUnit { font-size: 12px; color: var(--text-secondary); font-family: 'Mulish', sans-serif; }
+
+.card { border: 0.5px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 1.5rem; }
+.cardTitle { font-size: 13px; font-weight: 600; margin: 0 0 14px; font-family: 'Jost', sans-serif; }
+.legGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 1.5rem; }
+.legCard { border: 0.5px solid var(--border); border-radius: 12px; padding: 14px; }
+.legHead { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.legHead h3 { font-size: 13px; margin: 0; }
+.legRow { display: flex; justify-content: space-between; align-items: center; font-size: 13px; gap: 8px; padding: 4px 0; flex-wrap: wrap; }
+.instRow { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 5px 0; border-top: 0.5px solid var(--border); }
+.instRow input.instQ { width: 64px; height: 26px; text-align: right; border: 0.5px solid var(--border-strong); border-radius: 6px; padding: 0 6px; font-size: 12.5px; }
+.instRow input.instAmt { width: 130px; height: 26px; text-align: right; border: 0.5px solid var(--border-strong); border-radius: 6px; padding: 0 6px; font-size: 12.5px; }
+.instRow .instLbl { font-size: 12px; color: var(--text-secondary); }
+.capexRO { text-align: right; color: var(--text-primary); }
+#costTable tbody tr.capexTotalRow td { font-weight: 700; }
+#costTable tbody tr.capexTotalRow.dataRow td:nth-child(1), #costTable tbody tr.capexTotalRow.dataRow td:nth-child(2), #costTable tbody tr.capexTotalRow.dataRow td:nth-child(3), #costTable tbody tr.capexTotalRow.dataRow td:nth-child(4) { background: var(--surface-1); }
+#costTable tbody tr.capexTotalRow td.capexRO { background: var(--surface-1); }
+tr.capexTotalRow + tr td { border-top: 1.5px solid var(--border-strong); }
+.legRow span.lbl { color: var(--text-secondary); display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
+.bpLbl { color: var(--text-muted); font-size: 11px; white-space: nowrap; }
+.legRow input { width: 56px; height: 26px; text-align: right; border: 0.5px solid var(--border-strong); border-radius: 6px; padding: 0 6px; font-size: 12.5px; }
+.legRow input.bpNm { width: 68px; }
+.legRow input.bpCost { width: 84px; }
+.legRow input.bpName { width: 100%; height: 26px; border: 0.5px solid var(--border-strong); border-radius: 6px; padding: 0 6px; font-size: 12.5px; }
+.bpDot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+.bpRemove { border: none; background: none; color: var(--text-muted); font-size: 14px; padding: 0 4px; }
+.bpRemove:hover { color: #A32D2D; }
+.addBpBtn { border: none; background: none; color: var(--text-muted); font-size: 12px; padding: 4px 0; }
+.addBpBtn:hover { color: var(--accent-text); }
+
+.scheduleBar { display: flex; width: 100%; height: 24px; border-radius: 6px; overflow: hidden; }
+.scheduleBar > div { height: 100%; }
+.legend { display: flex; gap: 16px; margin-top: 10px; flex-wrap: wrap; }
+.legendItem { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); }
+.legendItem span { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+
+.waterfall { display: flex; gap: 8px; height: 170px; }
+.wfCol { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.wfLabel { text-align: center; font-size: 11.5px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wfBar { border-radius: 4px; }
+.wfNames { display: flex; gap: 8px; margin-top: 8px; }
+.wfNames span { flex: 1; text-align: center; font-size: 11.5px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.volChart { display: flex; align-items: flex-end; gap: 5px; height: 90px; }
+.volChart > div { flex: 1; background: var(--hinicio-cyan-bright); border-radius: 3px 3px 0 0; min-height: 1px; }
+.volLabels { display: flex; gap: 5px; margin-top: 4px; }
+.volLabels span { flex: 1; text-align: center; font-size: 10px; color: var(--text-muted); }
+.volbar { background: var(--hinicio-cyan-bright); border-radius: 3px 3px 0 0; min-height: 1px; }
+
+.catc-accent { background: var(--accent-bg); color: var(--accent-text); }
+.catc-success { background: var(--success-bg); color: var(--success-text); }
+.catc-warning { background: var(--warning-bg); color: var(--warning-text); }
+.catc-purple { background: var(--purple-bg); color: var(--purple-text); }
+.catc-pink { background: var(--pink-bg); color: var(--pink-text); }
+
+.seg-load, .seg-unload { background: var(--warning-line); }
+.seg-canal { background: var(--purple-line); }
+.seg-transit-out { background: var(--accent-line); }
+.seg-transit-return { background: var(--success-line); }
+.bpDot.seg-canal { background: var(--purple-line); }
+
+.wfBarBase { border-radius: 4px; }
+.wfTop { display: flex; align-items: flex-end; justify-content: center; }
+.wfBold { font-weight: 500; }
+.wf-accent { background: var(--accent-line); }
+.wf-success { background: var(--success-line); }
+.wf-warning { background: var(--warning-line); }
+.wf-purple { background: var(--purple-line); }
+.wf-pink { background: var(--pink-line); }
+.wf-total { background: var(--hinicio-navy); }
+
+.gridFleet { grid-template-columns: 200px; }
+.qHeadCell { text-align: right; }
+.noMargin { margin: 0; }
+.bpHint { margin: -4px 0 10px; }
+.w0{width:0%;}.w1{width:1%;}.w2{width:2%;}.w3{width:3%;}.w4{width:4%;}.w5{width:5%;}.w6{width:6%;}.w7{width:7%;}.w8{width:8%;}.w9{width:9%;}.w10{width:10%;}.w11{width:11%;}.w12{width:12%;}.w13{width:13%;}.w14{width:14%;}.w15{width:15%;}.w16{width:16%;}.w17{width:17%;}.w18{width:18%;}.w19{width:19%;}.w20{width:20%;}.w21{width:21%;}.w22{width:22%;}.w23{width:23%;}.w24{width:24%;}.w25{width:25%;}.w26{width:26%;}.w27{width:27%;}.w28{width:28%;}.w29{width:29%;}.w30{width:30%;}.w31{width:31%;}.w32{width:32%;}.w33{width:33%;}.w34{width:34%;}.w35{width:35%;}.w36{width:36%;}.w37{width:37%;}.w38{width:38%;}.w39{width:39%;}.w40{width:40%;}.w41{width:41%;}.w42{width:42%;}.w43{width:43%;}.w44{width:44%;}.w45{width:45%;}.w46{width:46%;}.w47{width:47%;}.w48{width:48%;}.w49{width:49%;}.w50{width:50%;}.w51{width:51%;}.w52{width:52%;}.w53{width:53%;}.w54{width:54%;}.w55{width:55%;}.w56{width:56%;}.w57{width:57%;}.w58{width:58%;}.w59{width:59%;}.w60{width:60%;}.w61{width:61%;}.w62{width:62%;}.w63{width:63%;}.w64{width:64%;}.w65{width:65%;}.w66{width:66%;}.w67{width:67%;}.w68{width:68%;}.w69{width:69%;}.w70{width:70%;}.w71{width:71%;}.w72{width:72%;}.w73{width:73%;}.w74{width:74%;}.w75{width:75%;}.w76{width:76%;}.w77{width:77%;}.w78{width:78%;}.w79{width:79%;}.w80{width:80%;}.w81{width:81%;}.w82{width:82%;}.w83{width:83%;}.w84{width:84%;}.w85{width:85%;}.w86{width:86%;}.w87{width:87%;}.w88{width:88%;}.w89{width:89%;}.w90{width:90%;}.w91{width:91%;}.w92{width:92%;}.w93{width:93%;}.w94{width:94%;}.w95{width:95%;}.w96{width:96%;}.w97{width:97%;}.w98{width:98%;}.w99{width:99%;}.w100{width:100%;}.h0{height:0px;}.h1{height:1px;}.h2{height:2px;}.h3{height:3px;}.h4{height:4px;}.h5{height:5px;}.h6{height:6px;}.h7{height:7px;}.h8{height:8px;}.h9{height:9px;}.h10{height:10px;}.h11{height:11px;}.h12{height:12px;}.h13{height:13px;}.h14{height:14px;}.h15{height:15px;}.h16{height:16px;}.h17{height:17px;}.h18{height:18px;}.h19{height:19px;}.h20{height:20px;}.h21{height:21px;}.h22{height:22px;}.h23{height:23px;}.h24{height:24px;}.h25{height:25px;}.h26{height:26px;}.h27{height:27px;}.h28{height:28px;}.h29{height:29px;}.h30{height:30px;}.h31{height:31px;}.h32{height:32px;}.h33{height:33px;}.h34{height:34px;}.h35{height:35px;}.h36{height:36px;}.h37{height:37px;}.h38{height:38px;}.h39{height:39px;}.h40{height:40px;}.h41{height:41px;}.h42{height:42px;}.h43{height:43px;}.h44{height:44px;}.h45{height:45px;}.h46{height:46px;}.h47{height:47px;}.h48{height:48px;}.h49{height:49px;}.h50{height:50px;}.h51{height:51px;}.h52{height:52px;}.h53{height:53px;}.h54{height:54px;}.h55{height:55px;}.h56{height:56px;}.h57{height:57px;}.h58{height:58px;}.h59{height:59px;}.h60{height:60px;}.h61{height:61px;}.h62{height:62px;}.h63{height:63px;}.h64{height:64px;}.h65{height:65px;}.h66{height:66px;}.h67{height:67px;}.h68{height:68px;}.h69{height:69px;}.h70{height:70px;}.h71{height:71px;}.h72{height:72px;}.h73{height:73px;}.h74{height:74px;}.h75{height:75px;}.h76{height:76px;}.h77{height:77px;}.h78{height:78px;}.h79{height:79px;}.h80{height:80px;}.h81{height:81px;}.h82{height:82px;}.h83{height:83px;}.h84{height:84px;}.h85{height:85px;}.h86{height:86px;}.h87{height:87px;}.h88{height:88px;}.h89{height:89px;}.h90{height:90px;}.h91{height:91px;}.h92{height:92px;}.h93{height:93px;}.h94{height:94px;}.h95{height:95px;}.h96{height:96px;}.h97{height:97px;}.h98{height:98px;}.h99{height:99px;}.h100{height:100px;}.h101{height:101px;}.h102{height:102px;}.h103{height:103px;}.h104{height:104px;}.h105{height:105px;}.h106{height:106px;}.h107{height:107px;}.h108{height:108px;}.h109{height:109px;}.h110{height:110px;}.h111{height:111px;}.h112{height:112px;}.h113{height:113px;}.h114{height:114px;}.h115{height:115px;}.h116{height:116px;}.h117{height:117px;}.h118{height:118px;}.h119{height:119px;}.h120{height:120px;}.h121{height:121px;}.h122{height:122px;}.h123{height:123px;}.h124{height:124px;}.h125{height:125px;}.h126{height:126px;}.h127{height:127px;}.h128{height:128px;}.h129{height:129px;}.h130{height:130px;}.h131{height:131px;}.h132{height:132px;}.h133{height:133px;}.h134{height:134px;}.h135{height:135px;}.h136{height:136px;}.h137{height:137px;}.h138{height:138px;}.h139{height:139px;}.h140{height:140px;}.h141{height:141px;}.h142{height:142px;}.h143{height:143px;}.h144{height:144px;}.h145{height:145px;}.h146{height:146px;}.h147{height:147px;}.h148{height:148px;}.h149{height:149px;}.h150{height:150px;}.h151{height:151px;}.h152{height:152px;}.h153{height:153px;}.h154{height:154px;}.h155{height:155px;}.h156{height:156px;}.h157{height:157px;}.h158{height:158px;}.h159{height:159px;}.h160{height:160px;}.h161{height:161px;}.h162{height:162px;}.h163{height:163px;}.h164{height:164px;}.h165{height:165px;}.h166{height:166px;}.h167{height:167px;}.h168{height:168px;}.h169{height:169px;}.h170{height:170px;}.p0{height:0%;}.p1{height:1%;}.p2{height:2%;}.p3{height:3%;}.p4{height:4%;}.p5{height:5%;}.p6{height:6%;}.p7{height:7%;}.p8{height:8%;}.p9{height:9%;}.p10{height:10%;}.p11{height:11%;}.p12{height:12%;}.p13{height:13%;}.p14{height:14%;}.p15{height:15%;}.p16{height:16%;}.p17{height:17%;}.p18{height:18%;}.p19{height:19%;}.p20{height:20%;}.p21{height:21%;}.p22{height:22%;}.p23{height:23%;}.p24{height:24%;}.p25{height:25%;}.p26{height:26%;}.p27{height:27%;}.p28{height:28%;}.p29{height:29%;}.p30{height:30%;}.p31{height:31%;}.p32{height:32%;}.p33{height:33%;}.p34{height:34%;}.p35{height:35%;}.p36{height:36%;}.p37{height:37%;}.p38{height:38%;}.p39{height:39%;}.p40{height:40%;}.p41{height:41%;}.p42{height:42%;}.p43{height:43%;}.p44{height:44%;}.p45{height:45%;}.p46{height:46%;}.p47{height:47%;}.p48{height:48%;}.p49{height:49%;}.p50{height:50%;}.p51{height:51%;}.p52{height:52%;}.p53{height:53%;}.p54{height:54%;}.p55{height:55%;}.p56{height:56%;}.p57{height:57%;}.p58{height:58%;}.p59{height:59%;}.p60{height:60%;}.p61{height:61%;}.p62{height:62%;}.p63{height:63%;}.p64{height:64%;}.p65{height:65%;}.p66{height:66%;}.p67{height:67%;}.p68{height:68%;}.p69{height:69%;}.p70{height:70%;}.p71{height:71%;}.p72{height:72%;}.p73{height:73%;}.p74{height:74%;}.p75{height:75%;}.p76{height:76%;}.p77{height:77%;}.p78{height:78%;}.p79{height:79%;}.p80{height:80%;}.p81{height:81%;}.p82{height:82%;}.p83{height:83%;}.p84{height:84%;}.p85{height:85%;}.p86{height:86%;}.p87{height:87%;}.p88{height:88%;}.p89{height:89%;}.p90{height:90%;}.p91{height:91%;}.p92{height:92%;}.p93{height:93%;}.p94{height:94%;}.p95{height:95%;}.p96{height:96%;}.p97{height:97%;}.p98{height:98%;}.p99{height:99%;}.p100{height:100%;}
+</style>
+
+</head>
+<body>
+
+<div id="configToolbar">
+  <button id="btnExportConfig">⬇ Export JSON</button>
+  <button id="btnImportConfig">⬆ Import JSON</button>
+  <input id="importFileInput" type="file" accept=".json" class="hidden">
+  <span id="savedPill"></span>
+  <span id="errPill"></span>
+</div>
+
+<div class="app">
+  <nav class="rail">
+    <img id="hinicioLogo" class="railLogo" alt="Hinicio">
+    <button class="railBtn active" id="navCapex" data-tab="capex" aria-label="Fleet capex schedule">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 3h10a2 2 0 0 1 2 2v16l-3-2-2 2-2-2-2 2-2-2-3 2V5a2 2 0 0 1 2-2z"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>
+    </button>
+    <button class="railBtn" id="navCosts" data-tab="costs" aria-label="Cost inputs">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M9 15.5c.5 1 1.5 1.5 3 1.5 1.8 0 3-1 3-2.3 0-3-6-1.5-6-4.5 0-1.3 1.3-2.2 3-2.2 1.5 0 2.5.5 3 1.5"/><path d="M12 6.5v11"/></svg>
+    </button>
+    <button class="railBtn" id="navOps" data-tab="ops" aria-label="Ship operations">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 16l1.5 3.5a3 3 0 0 0 2.7 1.7h9.6a3 3 0 0 0 2.7-1.7L21 16"/><path d="M5 16V8h4V4h6v4h4v8"/><path d="M3 16h18"/></svg>
+    </button>
+    <button class="railBtn" id="navResults" data-tab="results" aria-label="Fleet and results">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V10M11 20V4M18 20v-7"/><path d="M2 20h20"/></svg>
+    </button>
+    <button class="railBtn" id="navSensitivity" data-tab="sensitivity" aria-label="Sensitivity">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h6M14 6h6M4 12h10M18 12h2M4 18h4M12 18h8"/><circle cx="12" cy="6" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="10" cy="18" r="2"/></svg>
+    </button>
+  </nav>
+
+  <main class="content">
+    <header class="topbar">
+      <div>
+        <h2 id="pageTitle">Fleet capex schedule</h2>
+        <p class="sub" id="pageSub">Define one ship's payment schedule; it reconstructs the full fleet cashflow</p>
+      </div>
+      <div class="settingsBar">
+        <div class="settingField"><label>Start year</label><input id="startYear" value="2026"></div>
+        <div class="settingField"><label>Years</label><input id="numYears" value="20"></div>
+        <div class="settingField"><label>Ship start year</label><input id="shipStartYear" value="2026"></div>
+        <div class="settingField"><label>WACC %</label><input id="wacc" value="8.0"></div>
+      </div>
+    </header>
+
+    <section id="panelCosts" class="panel hidden">
+      <div class="panelActions">
+        <button class="btnGhost" id="btnAddItem">+ Add item</button>
+      </div>
+      <div class="tableWrap">
+        <table id="costTable">
+          <thead><tr id="costHeadRow"></tr></thead>
+          <tbody id="costBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="panelCapex" class="panel">
+      <div class="card">
+        <div class="legHead"><h3 class="cardTitle noMargin">Payment schedule for one ship</h3><button class="addBpBtn" id="addInstallmentBtn">+ Installment</button></div>
+        <p class="sub bpHint">Each installment is offset in quarters before that ship enters operation. This template is applied automatically to every ship the fleet schedule adds, working backward from its own entry quarter. See the reconstructed cashflow, ship by ship, in the Cost inputs tab.</p>
+        <div id="capexInstallments"></div>
+      </div>
+    </section>
+
+    <section id="panelOps" class="panel hidden">
+      <div class="grid3">
+        <div class="statBox"><label>Distance</label><input id="shipDistance" value="8400"><span class="metricUnit">nautical miles</span></div>
+        <div class="statBox"><label>Speed</label><input id="shipSpeed" value="15.5"><span class="metricUnit">knots</span></div>
+        <div class="statBox"><label>Capacity</label><input id="shipCapacity" value="20000"><span class="metricUnit">t LH2 per trip</span></div>
+      </div>
+      <div class="grid3">
+        <div class="statBox"><label>Port A cost</label><input id="portACost" value="150000"><span class="metricUnit">$ per call</span></div>
+        <div class="statBox"><label>Port B cost</label><input id="portBCost" value="150000"><span class="metricUnit">$ per call</span></div>
+      </div>
+      <div class="card" id="breakpointsCard">
+        <div class="legHead"><h3 class="cardTitle noMargin">Canal breakpoints</h3><button class="addBpBtn" id="addBpBtn">+ Breakpoint</button></div>
+        <p class="sub bpHint">Measured in nm from Port A. The return leg automatically mirrors these — no need to re-enter them.</p>
+        <div id="routeBreakpoints"></div>
+      </div>
+      <div class="legGrid">
+        <div class="legCard" id="legOutboundCard">
+          <div class="legHead"><h3>Outbound leg — Port A to Port B</h3></div>
+          <div class="legRow"><span class="lbl">Loading</span><input id="outLoading" value="2"></div>
+          <div class="legRow"><span class="lbl">Unloading</span><input id="outUnloading" value="2"></div>
+        </div>
+        <div class="legCard" id="legReturnCard">
+          <div class="legHead"><h3>Return leg — Port B to Port A</h3></div>
+          <div class="legRow"><span class="lbl">Loading</span><input id="retLoading" value="1"></div>
+          <div class="legRow"><span class="lbl">Unloading</span><input id="retUnloading" value="1"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="cardTitle" id="scheduleTitle">Round trip schedule</div>
+        <div class="scheduleBar" id="scheduleBar"></div>
+        <div class="legend">
+          <div class="legendItem"><span class="seg-load"></span>Loading / unloading</div>
+          <div class="legendItem"><span class="seg-transit-out"></span>Transit outbound</div>
+          <div class="legendItem"><span class="seg-transit-return"></span>Transit return</div>
+          <div class="legendItem"><span class="seg-canal"></span>Canal / breakpoint</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="cardTitle">Voyage economics</div>
+        <div class="grid4" id="voyageStats"></div>
+      </div>
+    </section>
+
+    <section id="panelResults" class="panel hidden">
+      <p class="sub bpHint">Fleet size is now set quarter by quarter in the Cost inputs tab — see the "Ships in operation" row.</p>
+      <div class="grid4" id="metricCards"></div>
+      <div class="card">
+        <div class="cardTitle">NPV cost waterfall</div>
+        <div class="waterfall" id="waterfall"></div>
+        <div class="wfNames" id="wfNames"></div>
+      </div>
+      <div class="card">
+        <div class="cardTitle">Tons shipped per year</div>
+        <div class="volChart" id="volChart"></div>
+        <div class="volLabels" id="volLabels"></div>
+      </div>
+    </section>
+
+    <section id="panelSensitivity" class="panel hidden">
+      <div class="card">
+        <div class="cardTitle">Choose a parameter to test</div>
+        <div class="grid3">
+          <div class="statBox"><label>Parameter</label><select id="sensParam"></select></div>
+          <div class="statBox">
+            <label>Output metric</label>
+            <select id="sensOutput">
+              <option value="lcos">Levelized cost ($/kg)</option>
+              <option value="npvCost">NPV total cost ($)</option>
+              <option value="avgVolume">Avg annual volume (t)</option>
+              <option value="costPerDay">Cost per day, NPV ($)</option>
+            </select>
+          </div>
+          <div class="statBox"><label>Steps</label><input id="sensSteps" value="5"></div>
+        </div>
+        <div class="grid3">
+          <div class="statBox"><label>Low value</label><input id="sensLow" value="0"></div>
+          <div class="statBox"><label>High value</label><input id="sensHigh" value="0"></div>
+          <div class="runBtnBox"><button class="modalApply" id="sensRunBtn">Run sensitivity</button></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="cardTitle" id="sensChartTitle">Result</div>
+        <p class="sub bpHint" id="sensEmptyHint">Pick a parameter and run the sensitivity to see results here.</p>
+        <div class="volChart" id="sensChart"></div>
+        <div class="volLabels" id="sensChartLabels"></div>
+        <div class="tableWrap sensTableWrap hidden" id="sensTableWrap">
+          <table id="sensTable">
+            <thead><tr><td id="sensTableParamHead">Value</td><td id="sensTableOutputHead">Result</td></tr></thead>
+            <tbody id="sensTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="modalOverlay hidden" id="bulkFillModal">
+  <div class="modalBox">
+    <h3 class="cardTitle noMargin">Fill quarters</h3>
+    <p class="sub bpHint" id="bulkFillItemName"></p>
+    <div class="modalRow">
+      <div class="modalField"><label>From quarter</label><select id="bulkFillFrom"></select></div>
+      <div class="modalField"><label>To quarter</label><select id="bulkFillTo"></select></div>
+    </div>
+    <div class="modalField"><label>Value</label><input id="bulkFillValue" value="0"></div>
+    <div class="modalActions">
+      <button class="btnGhost" id="bulkFillCancel">Cancel</button>
+      <button class="modalApply" id="bulkFillApply">Apply</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── STATIC CONFIG INJECTION ──
+/* @@STATIC_CONFIG_START@@
+const _INJECTED_CONFIG = @@STATIC_CONFIG_JSON@@;
+@@STATIC_CONFIG_END@@ */
+
+// const CONFIG_IS_PUBLIC = true;
+const POST_CONFIG_URL = '@@URLPOSTCONFIG@@';
+const POST_SYNC_URL = '@@URLSYNCCONFIG@@';
+const POST_CONFIG_AUTH = '@@AUTHORIZATION@@';
+const POST_CONFIG_UID = '@@UID@@';
+
+const HINICIO_LOGO = 'data:image/png;base64,' + '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';
+document.getElementById('hinicioLogo').src = HINICIO_LOGO;
+
+const IS_IFRAME = window.self !== window.top;
+
+if (IS_IFRAME) {
+  document.getElementById('btnExportConfig').classList.add('hidden');
+  document.getElementById('btnImportConfig').classList.add('hidden');
+  document.getElementById('importFileInput').classList.add('hidden');
+}
+
+// ── APP STATE ──
+let state = {
+  settings: { startYear: 2026, numYears: 20, wacc: 8.0 },
+  costItems: [
+    { id: 'i2', category: 'Capex', name: 'Loading terminal', scaling: 'total', values: { '2026-Q1': 12000000, '2026-Q2': 4000000 } },
+    { id: 'i3', category: 'Opex', name: 'Crew and fuel', scaling: 'perShip', values: { '2026-Q3': 600000, '2026-Q4': 600000, '2027-Q1': 600000 } },
+    { id: 'i4', category: 'Repex', name: 'Dry dock reserve', scaling: 'perShip', values: { '2028-Q3': 80000 } }
+  ],
+  shipCapexSchedule: [
+    { id: 'c1', quartersBefore: 8, amount: 20000000 },
+    { id: 'c2', quartersBefore: 6, amount: 25000000 },
+    { id: 'c3', quartersBefore: 4, amount: 25000000 },
+    { id: 'c4', quartersBefore: 2, amount: 15000000 }
+  ],
+  ship: {
+    distance: 8400, speed: 15.5, capacity: 20000,
+    portACost: 150000, portBCost: 150000,
+    breakpoints: [{ id: 'b1', name: 'Suez canal', nm: 3100, days: 1, cost: 300000 }],
+    outbound: { loading: 2, unloading: 2 },
+    returnLeg: { loading: 1, unloading: 1 }
+  },
+  fleet: {
+    shipStartYear: 2026,
+    schedule: { '2026-Q3': 1, '2027-Q1': 2, '2028-Q1': 3 }
+  },
+  sensitivity: null
+};
+let _idCounter = 10;
+const newId = function (p) { _idCounter += 1; return p + _idCounter; };
+
+const COLOR_PALETTE = ['accent', 'success', 'warning', 'purple', 'pink'];
+function colorKeyForCategory(cat) {
+  const order = [];
+  state.costItems.forEach(function (it) { if (order.indexOf(it.category) === -1) order.push(it.category); });
+  const idx = order.indexOf(cat);
+  return COLOR_PALETTE[idx >= 0 ? idx % COLOR_PALETTE.length : 0];
+}
+
+function getQuarters() {
+  const qs = [];
+  for (let y = 0; y < state.settings.numYears; y += 1) {
+    for (let q = 1; q <= 4; q += 1) {
+      qs.push({ key: (state.settings.startYear + y) + '-Q' + q, year: state.settings.startYear + y, q: q, index: qs.length });
+    }
+  }
+  return qs;
+}
+
+// ── TAB SWITCHING ──
+const TAB_META = {
+  capex: { title: 'Fleet capex schedule', sub: 'Define one ship\'s payment schedule; it reconstructs the full fleet cashflow' },
+  costs: { title: 'Cost inputs', sub: 'Any number of items, grouped freely, across every quarter of the horizon' },
+  ops: { title: 'Ship operations', sub: "One vessel's round trip, leg by leg" },
+  results: { title: 'Fleet and results', sub: 'NPV-based, using the WACC and horizon set above' },
+  sensitivity: { title: 'Sensitivity', sub: 'See how one input moves the levelized cost or any other output' }
+};
+function switchTab(tab) {
+  ['capex', 'costs', 'ops', 'results', 'sensitivity'].forEach(function (t) {
+    document.getElementById('panel' + t.charAt(0).toUpperCase() + t.slice(1)).classList.toggle('hidden', t !== tab);
+    document.getElementById('nav' + t.charAt(0).toUpperCase() + t.slice(1)).classList.toggle('active', t === tab);
+  });
+  document.getElementById('pageTitle').textContent = TAB_META[tab].title;
+  document.getElementById('pageSub').textContent = TAB_META[tab].sub;
+  if (tab === 'capex') renderCapexSchedule();
+  if (tab === 'ops') renderOps();
+  if (tab === 'results') renderResults();
+  if (tab === 'sensitivity') renderSensitivitySetup();
+}
+document.getElementById('navCapex').addEventListener('click', function () { switchTab('capex'); });
+document.getElementById('navCosts').addEventListener('click', function () { switchTab('costs'); });
+document.getElementById('navOps').addEventListener('click', function () { switchTab('ops'); });
+document.getElementById('navResults').addEventListener('click', function () { switchTab('results'); });
+document.getElementById('navSensitivity').addEventListener('click', function () { switchTab('sensitivity'); });
+
+// ── SETTINGS ──
+function readSettings() {
+  state.settings.startYear = parseIntNum(document.getElementById('startYear').value) || 2026;
+  state.settings.numYears = Math.max(1, parseIntNum(document.getElementById('numYears').value) || 1);
+  state.settings.wacc = parseNum(document.getElementById('wacc').value);
+  state.fleet.shipStartYear = parseIntNum(document.getElementById('shipStartYear').value) || state.settings.startYear;
+}
+['startYear', 'numYears', 'shipStartYear', 'wacc'].forEach(function (id) {
+  document.getElementById(id).addEventListener('change', function () {
+    readSettings();
+    renderCostTable();
+    renderResults();
+  });
+});
+
+// ── COST TABLE ──
+function getShipScheduleRaw(qKey) {
+  return state.fleet.schedule[qKey];
+}
+function getEffectiveShipCount(quarterIndex) {
+  const quarters = getQuarters();
+  const shipStartOffsetDays = Math.max(0, (state.fleet.shipStartYear - state.settings.startYear)) * 365.25;
+  const qDay = quarterIndex * QUARTER_DAYS;
+  if (qDay < shipStartOffsetDays) return 0;
+  let effective = 0;
+  for (let i = 0; i <= quarterIndex && i < quarters.length; i += 1) {
+    const raw = state.fleet.schedule[quarters[i].key];
+    if (raw !== undefined) effective = raw;
+  }
+  return effective;
+}
+
+// Every individual ship the fleet schedule ever adds, in order, with the quarter
+// it entered. Ships added simultaneously (a schedule jump of more than 1) each
+// get their own entry, all sharing that same entry quarter.
+function shipEntryEvents() {
+  const quarters = getQuarters();
+  const events = [];
+  let shipNumber = 0;
+  for (let i = 0; i < quarters.length; i += 1) {
+    const prev = i > 0 ? getEffectiveShipCount(i - 1) : 0;
+    const delta = Math.max(0, getEffectiveShipCount(i) - prev);
+    for (let k = 0; k < delta; k += 1) {
+      shipNumber += 1;
+      events.push({ shipNumber: shipNumber, entryIndex: i });
+    }
+  }
+  return events;
+}
+
+// One ship's own payment schedule, stamped backward from its entry quarter.
+// Installments that would fall before the modeled horizon starts are dropped —
+// there's no quarter to put them in — which matters for ships entering very
+// early relative to the template's total lead time.
+function shipCapexRow(entryIndex) {
+  const quarters = getQuarters();
+  const row = {};
+  quarters.forEach(function (q) { row[q.key] = 0; });
+  state.shipCapexSchedule.forEach(function (inst) {
+    const targetIdx = entryIndex - (Number(inst.quartersBefore) || 0);
+    if (targetIdx >= 0 && targetIdx < quarters.length) {
+      row[quarters[targetIdx].key] += Number(inst.amount) || 0;
+    }
+  });
+  return row;
+}
+
+// The fleet total is just the sum of every individual ship's row — same numbers
+// the per-ship rows in the UI show, so the total always ties out exactly.
+function reconstructedCapexByQuarter() {
+  const quarters = getQuarters();
+  const total = {};
+  quarters.forEach(function (q) { total[q.key] = 0; });
+  shipEntryEvents().forEach(function (ev) {
+    const row = shipCapexRow(ev.entryIndex);
+    quarters.forEach(function (q) { total[q.key] += row[q.key]; });
+  });
+  return total;
+}
+
+const SCALING_OPTIONS = [
+  { value: 'total', label: 'Total ($)' },
+  { value: 'perShip', label: '× ships operating' },
+  { value: 'perShipAdded', label: '× ships added' }
+];
+
+function scalingMultiplier(item, quarterIndex) {
+  if (item.scaling === 'perShip') return getEffectiveShipCount(quarterIndex);
+  if (item.scaling === 'perShipAdded') {
+    const prev = quarterIndex > 0 ? getEffectiveShipCount(quarterIndex - 1) : 0;
+    return Math.max(0, getEffectiveShipCount(quarterIndex) - prev);
+  }
+  return 1;
+}
+
+function renderCostTable() {
+  const quarters = getQuarters();
+  const head = document.getElementById('costHeadRow');
+  head.innerHTML = '<td></td><td>Category</td><td>Item</td><td>Scaling</td>' + quarters.map(function (q) {
+    return '<td class="qHeadCell">' + q.key.replace('-Q', ' Q') + '</td>';
+  }).join('') + '<td></td>';
+
+  const body = document.getElementById('costBody');
+  let rows = '';
+  rows += '<tr class="dataRow shipsRow">';
+  rows += '<td><button class="rowOpenBtn" data-role="openFill" data-item-id="__ships__" aria-label="Fill ship count across quarters"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></button></td>';
+  rows += '<td><span class="catBadgeInput fleetBadge">Fleet</span></td>';
+  rows += '<td class="nameCell"><span class="fleetLabel">Ships in operation</span></td>';
+  rows += '<td></td>';
+  quarters.forEach(function (q) {
+    rows += '<td class="qCell"><input data-role="shipValue" data-qkey="' + q.key + '" value="' + fmt(getEffectiveShipCount(q.index), 0) + '"></td>';
+  });
+  rows += '<td></td>';
+  rows += '</tr>';
+  const capexCk = colorKeyForCategory('Capex');
+  const events = shipEntryEvents();
+  const capexTotal = {};
+  quarters.forEach(function (q) { capexTotal[q.key] = 0; });
+  events.forEach(function (ev) {
+    const row = shipCapexRow(ev.entryIndex);
+    quarters.forEach(function (q) { capexTotal[q.key] += row[q.key]; });
+    rows += '<tr class="dataRow">';
+    rows += '<td></td>';
+    rows += '<td><span class="catBadgeInput catc-' + capexCk + '">Capex</span></td>';
+    rows += '<td class="nameCell"><span class="fleetLabel">CAPEX Ship ' + ev.shipNumber + '</span></td>';
+    rows += '<td></td>';
+    quarters.forEach(function (q) { rows += '<td class="qCell capexRO">' + fmt(row[q.key] || 0) + '</td>'; });
+    rows += '<td></td>';
+    rows += '</tr>';
+  });
+  if (events.length) {
+    rows += '<tr class="dataRow capexTotalRow">';
+    rows += '<td></td>';
+    rows += '<td><span class="catBadgeInput catc-' + capexCk + '">Capex</span></td>';
+    rows += '<td class="nameCell"><span class="fleetLabel">Fleet capex (total)</span></td>';
+    rows += '<td></td>';
+    quarters.forEach(function (q) { rows += '<td class="qCell capexRO">' + fmt(capexTotal[q.key] || 0) + '</td>'; });
+    rows += '<td></td>';
+    rows += '</tr>';
+  }
+  state.costItems.forEach(function (item) {
+    const ck = colorKeyForCategory(item.category);
+    const scaling = item.scaling || 'total';
+    rows += '<tr class="dataRow" data-item-id="' + item.id + '">';
+    rows += '<td><button class="rowOpenBtn" data-role="openFill" data-item-id="' + item.id + '" aria-label="Fill quarters for this item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></button></td>';
+    rows += '<td><input class="catBadgeInput catc-' + ck + '" data-role="cat" data-item-id="' + item.id + '" value="' + item.category + '"></td>';
+    rows += '<td class="nameCell"><input data-role="name" data-item-id="' + item.id + '" value="' + item.name + '"></td>';
+    rows += '<td><select class="scalingSelect" data-role="scaling" data-item-id="' + item.id + '">' + SCALING_OPTIONS.map(function (o) {
+      return '<option value="' + o.value + '"' + (o.value === scaling ? ' selected' : '') + '>' + o.label + '</option>';
+    }).join('') + '</select></td>';
+    quarters.forEach(function (q) {
+      const v = item.values[q.key] || 0;
+      const mult = scalingMultiplier(item, q.index);
+      const title = scaling === 'total' ? '' : ' title="' + fmt(v) + ' × ' + fmt(mult) + ' = ' + fmt(v * mult) + '"';
+      rows += '<td class="qCell"><input data-role="value" data-item-id="' + item.id + '" data-qkey="' + q.key + '" value="' + fmt(v, 2) + '"' + title + '></td>';
+    });
+    rows += '<td><button class="rowDelete" data-role="delete" data-item-id="' + item.id + '" aria-label="Delete item">×</button></td>';
+    rows += '</tr>';
+  });
+  rows += '<tr class="addRow" id="addCategoryRow"><td colspan="' + (quarters.length + 5) + '">+ Add category</td></tr>';
+  body.innerHTML = rows;
+}
+
+document.getElementById('btnAddItem').addEventListener('click', function () {
+  state.costItems.push({ id: newId('i'), category: state.costItems.length ? state.costItems[state.costItems.length - 1].category : 'Capex', name: 'New item', scaling: 'total', values: {} });
+  renderCostTable();
+  updateSaveButtonDirtyState();
+});
+
+document.getElementById('costBody').addEventListener('click', function (e) {
+  const del = e.target.closest('[data-role="delete"]');
+  if (del) {
+    state.costItems = state.costItems.filter(function (it) { return it.id !== del.dataset.itemId; });
+    renderCostTable();
+    updateSaveButtonDirtyState();
+    return;
+  }
+  const openFill = e.target.closest('[data-role="openFill"]');
+  if (openFill) {
+    openBulkFillModal(openFill.dataset.itemId);
+    return;
+  }
+  if (e.target.closest('#addCategoryRow')) {
+    const catName = prompt('New category name');
+    if (catName) {
+      state.costItems.push({ id: newId('i'), category: catName, name: 'New item', scaling: 'total', values: {} });
+      renderCostTable();
+      updateSaveButtonDirtyState();
+    }
+  }
+});
+
+document.getElementById('costBody').addEventListener('input', function (e) {
+  const role = e.target.dataset.role;
+  if (!role) return;
+  if (role === 'shipValue') {
+    const n = Math.max(0, Math.round(parseNum(e.target.value)));
+    state.fleet.schedule[e.target.dataset.qkey] = n;
+    return;
+  }
+  const item = state.costItems.find(function (it) { return it.id === e.target.dataset.itemId; });
+  if (!item) return;
+  if (role === 'name') item.name = e.target.value;
+  if (role === 'cat') {
+    item.category = e.target.value;
+    const ck = colorKeyForCategory(item.category);
+    e.target.className = 'catBadgeInput catc-' + ck;
+  }
+  if (role === 'value') item.values[e.target.dataset.qkey] = parseNum(e.target.value);
+});
+
+document.getElementById('costBody').addEventListener('change', function (e) {
+  if (e.target.dataset.role !== 'scaling') return;
+  const item = state.costItems.find(function (it) { return it.id === e.target.dataset.itemId; });
+  if (!item) return;
+  item.scaling = e.target.value;
+  renderCostTable();
+  updateSaveButtonDirtyState();
+});
+
+// ── BULK FILL MODAL ──
+let bulkFillItemId = null;
+function openBulkFillModal(itemId) {
+  const isShips = itemId === '__ships__';
+  const item = isShips ? null : state.costItems.find(function (it) { return it.id === itemId; });
+  if (!isShips && !item) return;
+  bulkFillItemId = itemId;
+  const quarters = getQuarters();
+  const optionsHtml = quarters.map(function (q) { return '<option value="' + q.key + '">' + q.key.replace('-Q', ' Q') + '</option>'; }).join('');
+  const fromSel = document.getElementById('bulkFillFrom');
+  const toSel = document.getElementById('bulkFillTo');
+  fromSel.innerHTML = optionsHtml;
+  toSel.innerHTML = optionsHtml;
+  fromSel.selectedIndex = 0;
+  toSel.selectedIndex = quarters.length - 1;
+  document.getElementById('bulkFillItemName').textContent = (isShips ? 'Ships in operation' : item.name) + ' — pick a range and a value to apply to every quarter in it';
+  document.getElementById('bulkFillValue').value = 0;
+  document.getElementById('bulkFillModal').classList.remove('hidden');
+}
+function closeBulkFillModal() {
+  document.getElementById('bulkFillModal').classList.add('hidden');
+  bulkFillItemId = null;
+}
+document.getElementById('bulkFillCancel').addEventListener('click', closeBulkFillModal);
+document.getElementById('bulkFillModal').addEventListener('click', function (e) {
+  if (e.target.id === 'bulkFillModal') closeBulkFillModal();
+});
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape' && !document.getElementById('bulkFillModal').classList.contains('hidden')) closeBulkFillModal();
+});
+document.getElementById('bulkFillApply').addEventListener('click', function () {
+  const isShips = bulkFillItemId === '__ships__';
+  const item = isShips ? null : state.costItems.find(function (it) { return it.id === bulkFillItemId; });
+  if (!isShips && !item) { closeBulkFillModal(); return; }
+  const quarters = getQuarters();
+  const fromIdx = document.getElementById('bulkFillFrom').selectedIndex;
+  const toIdx = document.getElementById('bulkFillTo').selectedIndex;
+  const lo = Math.min(fromIdx, toIdx);
+  const hi = Math.max(fromIdx, toIdx);
+  const rawValue = parseNum(document.getElementById('bulkFillValue').value);
+  const value = isShips ? Math.max(0, Math.round(rawValue)) : rawValue;
+  for (let i = lo; i <= hi; i += 1) {
+    if (isShips) state.fleet.schedule[quarters[i].key] = value;
+    else item.values[quarters[i].key] = value;
+  }
+  closeBulkFillModal();
+  renderCostTable();
+  updateSaveButtonDirtyState();
+});
+
+// ── FLEET CAPEX SCHEDULE ──
+function renderCapexInstallments() {
+  const container = document.getElementById('capexInstallments');
+  const sorted = state.shipCapexSchedule.slice().sort(function (a, b) { return b.quartersBefore - a.quartersBefore; });
+  container.innerHTML = sorted.map(function (inst) {
+    return '<div class="instRow" data-inst-id="' + inst.id + '">' +
+      '<span class="instLbl">Quarters before operating</span>' +
+      '<input class="instQ" data-role="instQ" data-inst-id="' + inst.id + '" value="' + fmt(inst.quartersBefore, 0) + '">' +
+      '<span class="instLbl">Amount</span>' +
+      '<input class="instAmt" data-role="instAmt" data-inst-id="' + inst.id + '" value="' + fmt(inst.amount, 2) + '">' +
+      '<button class="bpRemove" data-role="instRemove" data-inst-id="' + inst.id + '" aria-label="Remove installment">×</button>' +
+      '</div>';
+  }).join('');
+}
+
+function renderCapexSchedule() {
+  renderCapexInstallments();
+}
+
+document.getElementById('addInstallmentBtn').addEventListener('click', function () {
+  state.shipCapexSchedule.push({ id: newId('c'), quartersBefore: 0, amount: 0 });
+  renderCapexSchedule();
+  renderCostTable();
+  updateSaveButtonDirtyState();
+});
+document.getElementById('capexInstallments').addEventListener('input', function (e) {
+  const role = e.target.dataset.role;
+  if (!role) return;
+  const inst = state.shipCapexSchedule.find(function (x) { return x.id === e.target.dataset.instId; });
+  if (!inst) return;
+  if (role === 'instQ') inst.quartersBefore = Math.round(parseNum(e.target.value));
+  if (role === 'instAmt') inst.amount = parseNum(e.target.value);
+  renderCostTable();
+});
+document.getElementById('capexInstallments').addEventListener('click', function (e) {
+  const rm = e.target.closest('[data-role="instRemove"]');
+  if (!rm) return;
+  state.shipCapexSchedule = state.shipCapexSchedule.filter(function (x) { return x.id !== rm.dataset.instId; });
+  renderCapexSchedule();
+  renderCostTable();
+  updateSaveButtonDirtyState();
+});
+
+// ── SHIP OPERATIONS ──
+function renderBreakpoints() {
+  const container = document.getElementById('routeBreakpoints');
+  container.innerHTML = state.ship.breakpoints.map(function (bp) {
+    return '<div class="legRow" data-bp-id="' + bp.id + '">' +
+      '<span class="bpDot seg-canal"></span>' +
+      '<span class="bpLbl">Name</span>' +
+      '<input class="bpName" data-role="bpName" data-bp-id="' + bp.id + '" value="' + bp.name + '">' +
+      '<span class="bpLbl">From Port A</span>' +
+      '<input class="bpNm" data-role="bpNm" data-bp-id="' + bp.id + '" value="' + fmt(bp.nm, 2) + '" title="nm from Port A">' +
+      '<span class="bpLbl">Days</span>' +
+      '<input data-role="bpDays" data-bp-id="' + bp.id + '" value="' + fmt(bp.days, 2) + '" title="days transiting the canal">' +
+      '<span class="bpLbl">Toll $</span>' +
+      '<input class="bpCost" data-role="bpCost" data-bp-id="' + bp.id + '" value="' + fmt(bp.cost || 0, 2) + '" title="toll cost per transit, $">' +
+      '<button class="bpRemove" data-role="bpRemove" data-bp-id="' + bp.id + '" aria-label="Remove breakpoint">×</button>' +
+      '</div>';
+  }).join('');
+}
+
+function legDaysBreakdown(loadingDays, unloadingDays, breakpoints, distance, speed, mirrored) {
+  // Breakpoints are defined once, in nm from Port A. On the return leg (mirrored),
+  // the same physical canal sits at (distance - nm) from Port B, so the position
+  // is derived rather than re-entered — this is what keeps A→B and B→A symmetric.
+  const bps = breakpoints.map(function (bp) {
+    return { name: bp.name, days: Number(bp.days) || 0, cost: Number(bp.cost) || 0, nm: mirrored ? (distance - bp.nm) : bp.nm, originalNm: bp.nm };
+  }).sort(function (a, b) { return a.nm - b.nm; });
+  const segs = [];
+  segs.push({ type: 'load', days: Number(loadingDays) || 0, label: 'Loading' });
+  let prevNm = 0;
+  bps.forEach(function (bp) {
+    const transitNm = Math.max(0, bp.nm - prevNm);
+    const transitDays = transitNm / (speed * 24);
+    segs.push({ type: 'transit', days: transitDays, label: 'Transit', fromNm: prevNm, toNm: bp.nm });
+    segs.push({ type: 'canal', days: bp.days, label: bp.name || 'Canal', cost: bp.cost });
+    prevNm = bp.nm;
+  });
+  const lastNm = Math.max(0, distance - prevNm);
+  const lastTransit = lastNm / (speed * 24);
+  segs.push({ type: 'transit', days: lastTransit, label: 'Transit', fromNm: prevNm, toNm: distance });
+  segs.push({ type: 'unload', days: Number(unloadingDays) || 0, label: 'Unloading' });
+  const total = segs.reduce(function (s, x) { return s + x.days; }, 0);
+  return { segs: segs, total: total };
+}
+
+function shipCycle() {
+  const s = state.ship;
+  const out = legDaysBreakdown(s.outbound.loading, s.outbound.unloading, s.breakpoints, s.distance, s.speed, false);
+  const ret = legDaysBreakdown(s.returnLeg.loading, s.returnLeg.unloading, s.breakpoints, s.distance, s.speed, true);
+  return { out: out, ret: ret, cycleDays: out.total + ret.total };
+}
+
+function renderOps() {
+  const s = state.ship;
+  document.getElementById('shipDistance').value = fmt(s.distance, 2);
+  document.getElementById('shipSpeed').value = fmt(s.speed, 2);
+  document.getElementById('shipCapacity').value = fmt(s.capacity, 2);
+  document.getElementById('portACost').value = fmt(s.portACost || 0, 2);
+  document.getElementById('portBCost').value = fmt(s.portBCost || 0, 2);
+  document.getElementById('outLoading').value = fmt(s.outbound.loading, 2);
+  document.getElementById('outUnloading').value = fmt(s.outbound.unloading, 2);
+  document.getElementById('retLoading').value = fmt(s.returnLeg.loading, 2);
+  document.getElementById('retUnloading').value = fmt(s.returnLeg.unloading, 2);
+  renderBreakpoints();
+  renderSchedule();
+  renderVoyageStats();
+}
+
+function renderVoyageStats() {
+  const s = state.ship;
+  const cycle = shipCycle();
+  const tripsPerYear = cycle.cycleDays > 0 ? 365.25 / cycle.cycleDays : 0;
+  const canalTollPerTrip = s.breakpoints.reduce(function (sum, bp) { return sum + (Number(bp.cost) || 0); }, 0) * 2;
+  const portCostPerTrip = (Number(s.portACost) || 0) + (Number(s.portBCost) || 0);
+  const totalCostPerTrip = canalTollPerTrip + portCostPerTrip;
+  document.getElementById('voyageStats').innerHTML =
+    '<div class="statBox metricCard"><label>Cycle length</label><div class="metricVal">' + fmt(cycle.cycleDays, 1) + '<span class="metricUnit"> days</span></div></div>' +
+    '<div class="statBox metricCard"><label>Trips per ship, per year</label><div class="metricVal">' + fmt(tripsPerYear, 2) + '</div></div>' +
+    '<div class="statBox metricCard"><label>Port + canal cost per trip</label><div class="metricVal">$' + fmt(totalCostPerTrip / 1000, 0) + '<span class="metricUnit">k</span></div></div>' +
+    '<div class="statBox metricCard"><label>— of which canal tolls</label><div class="metricVal">$' + fmt(canalTollPerTrip / 1000, 0) + '<span class="metricUnit">k (both ways)</span></div></div>';
+}
+
+function segTooltip(seg) {
+  const d = fmt(seg.days, 2) + ' day' + (Math.abs(seg.days - 1) < 0.005 ? '' : 's');
+  if (seg.type === 'transit') {
+    return seg.label + ': ' + d + ' (' + fmt(seg.fromNm) + '–' + fmt(seg.toNm) + ' nm)';
+  }
+  if (seg.type === 'canal') {
+    return seg.label + ': ' + d + (seg.cost ? ' — $' + fmt(seg.cost) + ' toll' : '');
+  }
+  return seg.label + ': ' + d;
+}
+
+function renderSchedule() {
+  const cycle = shipCycle();
+  document.getElementById('scheduleTitle').textContent = 'Round trip schedule — ' + Math.round(cycle.cycleDays) + ' days total';
+  const classFor = function (type, isReturn) {
+    if (type === 'load' || type === 'unload') return 'seg-load';
+    if (type === 'canal') return 'seg-canal';
+    return isReturn ? 'seg-transit-return' : 'seg-transit-out';
+  };
+  let html = '';
+  const allSegs = cycle.out.segs.map(function (s) { return Object.assign({}, s, { ret: false }); })
+    .concat(cycle.ret.segs.map(function (s) { return Object.assign({}, s, { ret: true }); }));
+  allSegs.forEach(function (seg) {
+    const w = cycle.cycleDays ? (seg.days / cycle.cycleDays * 100) : 0;
+    html += '<div class="' + widthClass(w) + ' ' + classFor(seg.type, seg.ret) + '" title="' + (seg.ret ? 'Return leg — ' : 'Outbound leg — ') + segTooltip(seg) + '"></div>';
+  });
+  document.getElementById('scheduleBar').innerHTML = html;
+  renderVoyageStats();
+}
+
+document.getElementById('shipDistance').addEventListener('input', function (e) { state.ship.distance = parseNum(e.target.value); renderSchedule(); });
+document.getElementById('shipSpeed').addEventListener('input', function (e) { state.ship.speed = parseNum(e.target.value) || 0.1; renderSchedule(); });
+document.getElementById('shipCapacity').addEventListener('input', function (e) { state.ship.capacity = parseNum(e.target.value); });
+document.getElementById('portACost').addEventListener('input', function (e) { state.ship.portACost = parseNum(e.target.value); renderVoyageStats(); });
+document.getElementById('portBCost').addEventListener('input', function (e) { state.ship.portBCost = parseNum(e.target.value); renderVoyageStats(); });
+document.getElementById('outLoading').addEventListener('input', function (e) { state.ship.outbound.loading = parseNum(e.target.value); renderSchedule(); });
+document.getElementById('outUnloading').addEventListener('input', function (e) { state.ship.outbound.unloading = parseNum(e.target.value); renderSchedule(); });
+document.getElementById('retLoading').addEventListener('input', function (e) { state.ship.returnLeg.loading = parseNum(e.target.value); renderSchedule(); });
+document.getElementById('retUnloading').addEventListener('input', function (e) { state.ship.returnLeg.unloading = parseNum(e.target.value); renderSchedule(); });
+
+document.getElementById('addBpBtn').addEventListener('click', function () {
+  state.ship.breakpoints.push({ id: newId('b'), name: 'New breakpoint', nm: 0, days: 1, cost: 0 });
+  renderBreakpoints();
+  renderSchedule();
+  updateSaveButtonDirtyState();
+});
+
+document.getElementById('routeBreakpoints').addEventListener('input', function (e) {
+  const role = e.target.dataset.role;
+  if (!role) return;
+  const bp = state.ship.breakpoints.find(function (b) { return b.id === e.target.dataset.bpId; });
+  if (!bp) return;
+  if (role === 'bpName') bp.name = e.target.value;
+  if (role === 'bpNm') { bp.nm = parseNum(e.target.value); renderSchedule(); }
+  if (role === 'bpDays') { bp.days = parseNum(e.target.value); renderSchedule(); }
+  if (role === 'bpCost') { bp.cost = parseNum(e.target.value); renderSchedule(); }
+});
+document.getElementById('routeBreakpoints').addEventListener('click', function (e) {
+  const rm = e.target.closest('[data-role="bpRemove"]');
+  if (!rm) return;
+  state.ship.breakpoints = state.ship.breakpoints.filter(function (b) { return b.id !== rm.dataset.bpId; });
+  renderBreakpoints();
+  renderSchedule();
+  updateSaveButtonDirtyState();
+});
+
+// ── DYNAMIC VALUE → STATIC CLASS HELPERS (single style block, zero inline styles, no runtime CSSOM writes) ──
+function widthClass(pct) { return 'w' + Math.max(0, Math.min(100, Math.round(pct))); }
+function heightPxClass(px) { return 'h' + Math.max(0, Math.min(170, Math.round(px))); }
+function heightPctClass(pct) { return 'p' + Math.max(0, Math.min(100, Math.round(pct))); }
+
+// ── RESULTS ──
+const QUARTER_DAYS = 365.25 / 4;
+
+// Simulates each ship's actual voyages over the horizon. A delivery is recorded
+// the instant a ship finishes unloading at Port B (its full capacity, all at once
+// — never split), and it lands in whichever quarter/year that instant falls in.
+// Canal crossings are recorded the instant the ship reaches each breakpoint, on
+// both the outbound and return leg. Ships are staggered evenly across one cycle
+// so a multi-ship fleet arrives continuously rather than all bunched together.
+// Simulates each ship's actual voyages over the horizon. A delivery is recorded
+// the instant a ship finishes unloading at Port B (its full capacity, all at once
+// — never split), and it lands in whichever quarter/year that instant falls in.
+// Canal crossings are recorded the instant the ship reaches each breakpoint, on
+// both the outbound and return leg. Ships are staggered evenly across one cycle.
+//
+// Fleet size can now vary by quarter (set in the Cost tab's "Ships in operation"
+// row), and ship operations can start in a different year than the cashflow.
+// A pool of ships is simulated up to the largest fleet size ever scheduled; each
+// pooled ship's activity for a given round trip is decided once, at the start of
+// that trip, by whether its rank is within that quarter's scheduled fleet size —
+// a ship ranked 3rd contributes nothing until the schedule reaches 3 ships.
+function simulateVoyages() {
+  const cycle = shipCycle();
+  const totalQuarters = state.settings.numYears * 4;
+  const horizonDays = totalQuarters * QUARTER_DAYS;
+  const deliveries = [];
+  const canalCrossings = [];
+  const portCalls = [];
+  if (cycle.cycleDays <= 0) return { deliveries: deliveries, canalCrossings: canalCrossings, portCalls: portCalls };
+
+  const quarters = getQuarters();
+  let maxShipsPool = 0;
+  quarters.forEach(function (q) { maxShipsPool = Math.max(maxShipsPool, getEffectiveShipCount(q.index)); });
+  maxShipsPool = Math.min(20, maxShipsPool);
+  if (maxShipsPool <= 0) return { deliveries: deliveries, canalCrossings: canalCrossings, portCalls: portCalls };
+
+  const shipStartOffsetDays = Math.max(0, (state.fleet.shipStartYear - state.settings.startYear)) * 365.25;
+  const staggerStep = cycle.cycleDays / maxShipsPool;
+
+  function walkLeg(startDay, segs, active) {
+    let t = startDay;
+    segs.forEach(function (seg) {
+      if (active && seg.type === 'canal' && t < horizonDays) {
+        canalCrossings.push({ day: t, name: seg.label, cost: seg.cost || 0 });
+      }
+      t += seg.days;
+    });
+    return t;
+  }
+
+  for (let i = 0; i < maxShipsPool; i += 1) {
+    let t = shipStartOffsetDays + i * staggerStep;
+    while (t < horizonDays) {
+      const qi = Math.floor(t / QUARTER_DAYS);
+      const active = (i + 1) <= getEffectiveShipCount(qi);
+      if (active) portCalls.push({ day: t, port: 'A', cost: state.ship.portACost || 0 });
+      const outEnd = walkLeg(t, cycle.out.segs, active);
+      if (outEnd > horizonDays) break;
+      if (active) {
+        deliveries.push({ day: outEnd });
+        portCalls.push({ day: outEnd, port: 'B', cost: state.ship.portBCost || 0 });
+      }
+      t = walkLeg(outEnd, cycle.ret.segs, active);
+    }
+  }
+  return { deliveries: deliveries, canalCrossings: canalCrossings, portCalls: portCalls };
+}
+
+function computeResults() {
+  readSettings();
+  const quarters = getQuarters();
+  const cycle = shipCycle();
+  const wacc = state.settings.wacc / 100;
+  const voyages = simulateVoyages();
+
+  const categories = [];
+  state.costItems.forEach(function (it) { if (categories.indexOf(it.category) === -1) categories.push(it.category); });
+  const canalNames = [];
+  state.ship.breakpoints.forEach(function (bp) { const n = (bp.name || 'Canal') + ' toll'; if (canalNames.indexOf(n) === -1) canalNames.push(n); });
+  const portNames = ['Port A fees', 'Port B fees'];
+  const capexScheduleName = 'Fleet capex schedule';
+  const reconstructedCapex = reconstructedCapexByQuarter();
+
+  let npvCostTotal = 0, npvVolumeTons = 0, npvDays = 0, totalVolumeTons = 0;
+  const npvByCategory = {};
+  categories.concat(canalNames).concat(portNames).concat([capexScheduleName]).forEach(function (c) { npvByCategory[c] = 0; });
+  const annualVolume = {};
+  const deliveriesByQuarter = {};
+  voyages.deliveries.forEach(function (d) {
+    const qi = Math.floor(d.day / QUARTER_DAYS);
+    deliveriesByQuarter[qi] = (deliveriesByQuarter[qi] || 0) + 1;
+  });
+  const canalCostByQuarter = {};
+  voyages.canalCrossings.forEach(function (c) {
+    const qi = Math.floor(c.day / QUARTER_DAYS);
+    const key = (c.name || 'Canal') + ' toll';
+    canalCostByQuarter[qi] = canalCostByQuarter[qi] || {};
+    canalCostByQuarter[qi][key] = (canalCostByQuarter[qi][key] || 0) + c.cost;
+  });
+  const portCostByQuarter = {};
+  voyages.portCalls.forEach(function (p) {
+    const qi = Math.floor(p.day / QUARTER_DAYS);
+    const key = 'Port ' + p.port + ' fees';
+    portCostByQuarter[qi] = portCostByQuarter[qi] || {};
+    portCostByQuarter[qi][key] = (portCostByQuarter[qi][key] || 0) + p.cost;
+  });
+
+  quarters.forEach(function (q) {
+    const df = Math.pow(1 + wacc, -(q.index / 4));
+    const deliveryCount = deliveriesByQuarter[q.index] || 0;
+    const volumeTons = deliveryCount * state.ship.capacity;
+    totalVolumeTons += volumeTons;
+    annualVolume[q.year] = (annualVolume[q.year] || 0) + volumeTons;
+    npvVolumeTons += volumeTons * df;
+    npvDays += QUARTER_DAYS * df;
+    state.costItems.forEach(function (item) {
+      const raw = item.values[q.key] || 0;
+      const v = raw * scalingMultiplier(item, q.index);
+      npvByCategory[item.category] += v * df;
+      npvCostTotal += v * df;
+    });
+    const canalCosts = canalCostByQuarter[q.index];
+    if (canalCosts) {
+      Object.keys(canalCosts).forEach(function (key) {
+        npvByCategory[key] += canalCosts[key] * df;
+        npvCostTotal += canalCosts[key] * df;
+      });
+    }
+    const portCosts = portCostByQuarter[q.index];
+    if (portCosts) {
+      Object.keys(portCosts).forEach(function (key) {
+        npvByCategory[key] += portCosts[key] * df;
+        npvCostTotal += portCosts[key] * df;
+      });
+    }
+    const capexAmt = reconstructedCapex[q.key] || 0;
+    if (capexAmt) {
+      npvByCategory[capexScheduleName] += capexAmt * df;
+      npvCostTotal += capexAmt * df;
+    }
+  });
+
+  const npvVolumeKg = npvVolumeTons * 1000;
+  const lcos = npvVolumeKg > 0 ? npvCostTotal / npvVolumeKg : 0;
+  const costPerDay = npvDays > 0 ? npvCostTotal / npvDays : 0;
+  const avgAnnualVolume = state.settings.numYears ? (totalVolumeTons / state.settings.numYears) : 0;
+  const allCategories = categories.concat(canalNames.concat(portNames).concat([capexScheduleName]).filter(function (c) { return npvByCategory[c] > 0; }));
+
+  return { categories: allCategories, npvByCategory: npvByCategory, npvCostTotal: npvCostTotal, lcos: lcos, costPerDay: costPerDay, avgAnnualVolume: avgAnnualVolume, annualVolume: annualVolume, cycleDays: cycle.cycleDays };
+}
+
+function fmt(n, d) { return Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: d === undefined ? 0 : d, minimumFractionDigits: 0 }); }
+// Inputs display comma-thousands / dot-decimal (via fmt above); these strip the
+// thousands commas back out before parsing, so editing a formatted field never
+// silently truncates at the comma.
+function parseNum(str) { return parseFloat(String(str == null ? '' : str).replace(/,/g, '')) || 0; }
+function parseIntNum(str) { return parseInt(String(str == null ? '' : str).replace(/,/g, ''), 10) || 0; }
+
+function renderResults() {
+  const r = computeResults();
+
+  document.getElementById('metricCards').innerHTML =
+    '<div class="statBox metricCard"><label>Levelized cost</label><div class="metricVal">$' + fmt(r.lcos, 2) + '<span class="metricUnit">/kg</span></div></div>' +
+    '<div class="statBox metricCard"><label>Avg annual volume</label><div class="metricVal">' + fmt(r.avgAnnualVolume / 1000, 0) + 'k<span class="metricUnit"> t</span></div></div>' +
+    '<div class="statBox metricCard"><label>NPV total cost</label><div class="metricVal">$' + fmt(r.npvCostTotal / 1e9, 2) + '<span class="metricUnit">bn</span></div></div>' +
+    '<div class="statBox metricCard"><label>Cost per day, NPV</label><div class="metricVal">$' + fmt(r.costPerDay, 0) + '<span class="metricUnit">/day</span></div></div>';
+
+  const CHART_H = 170;
+  const LABEL_SPACE = 18;
+  const usable = CHART_H - LABEL_SPACE;
+  const maxVal = r.npvCostTotal || 1;
+  let cum = 0;
+  let wfHtml = '';
+  let namesHtml = '';
+  r.categories.forEach(function (c, i) {
+    const val = r.npvByCategory[c];
+    const bottom = cum;
+    cum += val;
+    const topSpacer = LABEL_SPACE + Math.max(0, usable - (bottom / maxVal * usable) - (val / maxVal * usable));
+    const barH = Math.max(2, val / maxVal * usable);
+    const bottomSpacer = Math.max(0, bottom / maxVal * usable);
+    const ck = COLOR_PALETTE[i % COLOR_PALETTE.length];
+    wfHtml += '<div class="wfCol">' +
+      '<div class="wfLabel wfTop ' + heightPxClass(topSpacer) + '">$' + fmt(val / 1e9, 2) + 'bn</div>' +
+      '<div class="wfBarBase wf-' + ck + ' ' + heightPxClass(barH) + '"></div>' +
+      '<div class="' + heightPxClass(bottomSpacer) + '"></div>' +
+      '</div>';
+    namesHtml += '<span>' + c + '</span>';
+  });
+  wfHtml += '<div class="wfCol">' +
+    '<div class="wfLabel wfTop wfBold ' + heightPxClass(LABEL_SPACE) + '">$' + fmt(r.npvCostTotal / 1e9, 2) + 'bn</div>' +
+    '<div class="wfBarBase wf-total ' + heightPxClass(usable) + '"></div>' +
+    '</div>';
+  namesHtml += '<span>Total</span>';
+  document.getElementById('waterfall').innerHTML = wfHtml;
+  document.getElementById('wfNames').innerHTML = namesHtml;
+
+  const years = Object.keys(r.annualVolume);
+  const maxAnnual = Math.max.apply(null, years.map(function (y) { return r.annualVolume[y]; }).concat([1]));
+  document.getElementById('volChart').innerHTML = years.map(function (y) {
+    const h = Math.max(1, r.annualVolume[y] / maxAnnual * 100);
+    return '<div class="volbar ' + heightPctClass(h) + '" title="' + fmt(r.annualVolume[y]) + ' t"></div>';
+  }).join('');
+  document.getElementById('volLabels').innerHTML = years.map(function (y) { return '<span>' + y + '</span>'; }).join('');
+}
+
+// ── CONFIG BUILD / APPLY ──
+function buildConfigJSON() {
+  return {
+    settings: state.settings,
+    costItems: state.costItems,
+    shipCapexSchedule: state.shipCapexSchedule,
+    ship: state.ship,
+    fleet: state.fleet,
+    sensitivity: state.sensitivity
+  };
+}
+
+function applyConfig(cfg) {
+  if (!cfg || typeof cfg !== 'object' || !Object.keys(cfg).length) return;
+  if (cfg.settings) state.settings = cfg.settings;
+  if (cfg.costItems) state.costItems = cfg.costItems;
+  state.shipCapexSchedule = Array.isArray(cfg.shipCapexSchedule) ? cfg.shipCapexSchedule : [];
+  if (cfg.ship) state.ship = cfg.ship;
+  if (cfg.fleet) state.fleet = cfg.fleet;
+  if (cfg.sensitivity !== undefined) state.sensitivity = cfg.sensitivity;
+  // Migrate older exports that stored separate outbound/return breakpoint lists
+  // (measured from each leg's own departure port) into the single shared,
+  // Port-A-referenced list the tool now uses.
+  if (!Array.isArray(state.ship.breakpoints)) {
+    const legacyOut = (state.ship.outbound && state.ship.outbound.breakpoints) || [];
+    const legacyRet = (state.ship.returnLeg && state.ship.returnLeg.breakpoints) || [];
+    state.ship.breakpoints = legacyOut.length ? legacyOut : legacyRet;
+    if (state.ship.outbound) delete state.ship.outbound.breakpoints;
+    if (state.ship.returnLeg) delete state.ship.returnLeg.breakpoints;
+  }
+  if (typeof state.ship.portACost !== 'number') state.ship.portACost = 0;
+  if (typeof state.ship.portBCost !== 'number') state.ship.portBCost = 0;
+  state.ship.breakpoints.forEach(function (bp) { if (typeof bp.cost !== 'number') bp.cost = 0; });
+  state.costItems.forEach(function (item) { if (!item.scaling) item.scaling = 'total'; });
+  // Migrate older exports that stored a single flat fleet.numShips into the new
+  // per-quarter "Ships in operation" schedule, and default a ship start year.
+  if (!state.fleet || typeof state.fleet.numShips === 'number') {
+    const legacyCount = (state.fleet && state.fleet.numShips) || 0;
+    const startYear = state.settings.startYear;
+    state.fleet = {
+      shipStartYear: startYear,
+      schedule: legacyCount > 0 ? (function () { const s = {}; s[startYear + '-Q1'] = legacyCount; return s; })() : {}
+    };
+  }
+  if (typeof state.fleet.shipStartYear !== 'number') state.fleet.shipStartYear = state.settings.startYear;
+  if (!state.fleet.schedule || typeof state.fleet.schedule !== 'object') state.fleet.schedule = {};
+  document.getElementById('startYear').value = fmt(state.settings.startYear, 0);
+  document.getElementById('numYears').value = fmt(state.settings.numYears, 0);
+  document.getElementById('shipStartYear').value = fmt(state.fleet.shipStartYear, 0);
+  document.getElementById('wacc').value = fmt(state.settings.wacc, 2);
+  renderCapexSchedule();
+  renderCostTable();
+  renderOps();
+  renderResults();
+}
+
+// ── Dirty state tracking ──
+let _lastSavedSnapshot = null;
+
+function updateSaveButtonDirtyState() {
+  const btn = document.getElementById('btnSendConfig');
+  if (!btn || _lastSavedSnapshot === null) return;
+  const dirty = JSON.stringify(buildConfigJSON()) !== _lastSavedSnapshot;
+  const wasDirty = btn.classList.contains('dirty');
+  btn.classList.toggle('dirty', dirty);
+  if (dirty && !wasDirty) {
+    window.parent.postMessage({
+      type: "DASHBOARD_STATUS",
+      status: "unsaved"
+    }, "*");
+  }
+}
+
+document.body.addEventListener('input', updateSaveButtonDirtyState);
+document.body.addEventListener('change', updateSaveButtonDirtyState);
+
+// ── Export ──
+document.getElementById('btnExportConfig').addEventListener('click', function () {
+  const json = JSON.stringify(buildConfigJSON(), null, 2);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+  a.download = 'config.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+// ── Import ──
+document.getElementById('btnImportConfig').addEventListener('click', function () {
+  document.getElementById('importFileInput').click();
+});
+document.getElementById('importFileInput').addEventListener('change', function (e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.addEventListener('load', function (ev) {
+    try {
+      applyConfig(JSON.parse(ev.target.result));
+      updateSaveButtonDirtyState();
+    } catch (err) {
+      const pill = document.getElementById('errPill');
+      pill.textContent = 'Import error: ' + err.message;
+      pill.classList.add('show');
+      setTimeout(function () { pill.classList.remove('show'); }, 4000);
+    }
+  });
+  reader.readAsText(file);
+  e.target.value = '';
+});
+
+// ── Send Config (only wired when URL placeholder is replaced) ──
+async function sendConfig() {
+  const btn = document.getElementById('btnSendConfig');
+  btn.disabled = true;
+  try {
+    const headers = { 'Content-Type': 'application/json' };
+    if (POST_CONFIG_AUTH && POST_CONFIG_AUTH !== '@@AUTHORIZATION@@') {
+      headers['Authorization'] = POST_CONFIG_AUTH;
+    }
+    const res = await fetch(POST_CONFIG_URL, {
+      method: 'POST',
+      headers: headers,
+      body: JSON.stringify({
+        html: null,
+        config: buildConfigJSON(),
+        uid: POST_CONFIG_UID
+      })
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const pill = document.getElementById('savedPill');
+    pill.textContent = 'Saved ✓';
+    pill.classList.add('show');
+    setTimeout(function () { pill.classList.remove('show'); }, 3000);
+    _lastSavedSnapshot = JSON.stringify(buildConfigJSON());
+    btn.classList.remove('dirty');
+    window.parent.postMessage({
+      type: "DASHBOARD_STATUS",
+      status: "saved"
+    }, "*");
+  } catch (err) {
+    const pill = document.getElementById('errPill');
+    pill.textContent = 'Error: ' + err.message;
+    pill.classList.add('show');
+    setTimeout(function () { pill.classList.remove('show'); }, 4000);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '💾 Save';
+  }
+}
+
+if (POST_CONFIG_URL && POST_CONFIG_URL !== '@@URLPOSTCONFIG@@') {
+  const btn = document.createElement('button');
+  btn.id = 'btnSendConfig';
+  btn.textContent = '💾 Save';
+  btn.addEventListener('click', sendConfig);
+  document.getElementById('configToolbar').appendChild(btn);
+}
+
+// ── SENSITIVITY ──
+function findBreakpoint(id) { return state.ship.breakpoints.find(function (b) { return b.id === id; }); }
+
+function sensitivityParams() {
+  const params = [
+    { key: 'speed', label: 'Speed (knots)' },
+    { key: 'distance', label: 'Distance (nm)' },
+    { key: 'capacity', label: 'Capacity (t per trip)' },
+    { key: 'outLoading', label: 'Outbound loading (days)' },
+    { key: 'outUnloading', label: 'Outbound unloading (days)' },
+    { key: 'retLoading', label: 'Return loading (days)' },
+    { key: 'retUnloading', label: 'Return unloading (days)' },
+    { key: 'shipStartYear', label: 'Ship start year' },
+    { key: 'wacc', label: 'WACC (%)' },
+    { key: 'portACost', label: 'Port A cost ($ per call)' },
+    { key: 'portBCost', label: 'Port B cost ($ per call)' }
+  ];
+  state.ship.breakpoints.forEach(function (bp) {
+    const label = bp.name || 'Canal';
+    params.push({ key: 'bpcost:' + bp.id, label: label + ' — toll ($)' });
+    params.push({ key: 'bpdays:' + bp.id, label: label + ' — transit (days)' });
+  });
+  return params;
+}
+
+function getParamValue(key) {
+  if (key === 'speed') return state.ship.speed;
+  if (key === 'distance') return state.ship.distance;
+  if (key === 'capacity') return state.ship.capacity;
+  if (key === 'outLoading') return state.ship.outbound.loading;
+  if (key === 'outUnloading') return state.ship.outbound.unloading;
+  if (key === 'retLoading') return state.ship.returnLeg.loading;
+  if (key === 'retUnloading') return state.ship.returnLeg.unloading;
+  if (key === 'shipStartYear') return state.fleet.shipStartYear;
+  if (key === 'wacc') return state.settings.wacc;
+  if (key === 'portACost') return state.ship.portACost || 0;
+  if (key === 'portBCost') return state.ship.portBCost || 0;
+  if (key.indexOf('bpcost:') === 0) { const bp = findBreakpoint(key.slice(7)); return bp ? bp.cost : 0; }
+  if (key.indexOf('bpdays:') === 0) { const bp = findBreakpoint(key.slice(7)); return bp ? bp.days : 0; }
+  return 0;
+}
+
+function setParamValue(key, value) {
+  if (key === 'speed') state.ship.speed = value;
+  else if (key === 'distance') state.ship.distance = value;
+  else if (key === 'capacity') state.ship.capacity = value;
+  else if (key === 'outLoading') state.ship.outbound.loading = value;
+  else if (key === 'outUnloading') state.ship.outbound.unloading = value;
+  else if (key === 'retLoading') state.ship.returnLeg.loading = value;
+  else if (key === 'retUnloading') state.ship.returnLeg.unloading = value;
+  else if (key === 'shipStartYear') { state.fleet.shipStartYear = value; document.getElementById('shipStartYear').value = fmt(value, 0); }
+  else if (key === 'wacc') { state.settings.wacc = value; document.getElementById('wacc').value = fmt(value, 2); }
+  else if (key === 'portACost') state.ship.portACost = value;
+  else if (key === 'portBCost') state.ship.portBCost = value;
+  else if (key.indexOf('bpcost:') === 0) { const bp = findBreakpoint(key.slice(7)); if (bp) bp.cost = value; }
+  else if (key.indexOf('bpdays:') === 0) { const bp = findBreakpoint(key.slice(7)); if (bp) bp.days = value; }
+}
+
+const SENS_OUTPUT_META = {
+  lcos: { label: 'Levelized cost', unit: '$/kg', decimals: 2, get: function (r) { return r.lcos; } },
+  npvCost: { label: 'NPV total cost', unit: '$bn', decimals: 2, get: function (r) { return r.npvCostTotal / 1e9; } },
+  avgVolume: { label: 'Avg annual volume', unit: 'kt', decimals: 0, get: function (r) { return r.avgAnnualVolume / 1000; } },
+  costPerDay: { label: 'Cost per day, NPV', unit: '$/day', decimals: 0, get: function (r) { return r.costPerDay; } }
+};
+
+function renderSensitivitySetup() {
+  const sel = document.getElementById('sensParam');
+  const prevKey = sel.value;
+  const params = sensitivityParams();
+  sel.innerHTML = params.map(function (p) { return '<option value="' + p.key + '">' + p.label + '</option>'; }).join('');
+
+  const saved = state.sensitivity;
+  const savedStillValid = saved && params.some(function (p) { return p.key === saved.paramKey; });
+  if (savedStillValid) {
+    sel.value = saved.paramKey;
+    document.getElementById('sensOutput').value = saved.outputKey;
+    document.getElementById('sensLow').value = saved.low;
+    document.getElementById('sensHigh').value = saved.high;
+    document.getElementById('sensSteps').value = saved.steps;
+    renderSensitivityChart(saved.points, saved.outputKey);
+    return;
+  }
+
+  const stillValid = params.some(function (p) { return p.key === prevKey; });
+  sel.value = stillValid ? prevKey : params[0].key;
+  fillDefaultRange();
+}
+
+function fillDefaultRange() {
+  const key = document.getElementById('sensParam').value;
+  const base = getParamValue(key);
+  let low, high;
+  if (key === 'shipStartYear') {
+    low = base;
+    high = base + 5;
+  } else {
+    low = base === 0 ? 0 : base * 0.8;
+    high = base === 0 ? Math.max(1, base) * 100 : base * 1.2;
+  }
+  document.getElementById('sensLow').value = fmt(low, 2);
+  document.getElementById('sensHigh').value = fmt(high, 2);
+}
+document.getElementById('sensParam').addEventListener('change', fillDefaultRange);
+
+function renderSensitivityChart(points, outputKey) {
+  const meta = SENS_OUTPUT_META[outputKey];
+  document.getElementById('sensChartTitle').textContent = meta.label + ' vs. ' + document.getElementById('sensParam').selectedOptions[0].textContent;
+  document.getElementById('sensEmptyHint').classList.add('hidden');
+  const maxY = Math.max.apply(null, points.map(function (p) { return p.y; }).concat([1e-9]));
+  document.getElementById('sensChart').innerHTML = points.map(function (p) {
+    const h = maxY > 0 ? Math.max(1, p.y / maxY * 100) : 1;
+    return '<div class="volbar ' + heightPctClass(h) + '" title="' + fmt(p.x, 2) + ' → ' + fmt(p.y, meta.decimals) + ' ' + meta.unit + '"></div>';
+  }).join('');
+  document.getElementById('sensChartLabels').innerHTML = points.map(function (p) { return '<span>' + fmt(p.x, 2) + '</span>'; }).join('');
+  document.getElementById('sensTableParamHead').textContent = document.getElementById('sensParam').selectedOptions[0].textContent;
+  document.getElementById('sensTableOutputHead').textContent = meta.label + ' (' + meta.unit + ')';
+  document.getElementById('sensTableBody').innerHTML = points.map(function (p) {
+    return '<tr><td>' + fmt(p.x, 2) + '</td><td>' + fmt(p.y, meta.decimals) + '</td></tr>';
+  }).join('');
+  document.getElementById('sensTableWrap').classList.remove('hidden');
+}
+
+document.getElementById('sensRunBtn').addEventListener('click', function () {
+  const paramKey = document.getElementById('sensParam').value;
+  const outputKey = document.getElementById('sensOutput').value;
+  const low = parseNum(document.getElementById('sensLow').value);
+  const high = parseNum(document.getElementById('sensHigh').value);
+  const steps = Math.max(2, Math.min(12, parseIntNum(document.getElementById('sensSteps').value) || 5));
+  const originalValue = getParamValue(paramKey);
+  const originalWaccDom = document.getElementById('wacc').value;
+  const originalShipStartYearDom = document.getElementById('shipStartYear').value;
+
+  const points = [];
+  for (let i = 0; i < steps; i += 1) {
+    const v = steps === 1 ? low : low + i * (high - low) / (steps - 1);
+    setParamValue(paramKey, v);
+    const res = computeResults();
+    points.push({ x: v, y: SENS_OUTPUT_META[outputKey].get(res) });
+  }
+  setParamValue(paramKey, originalValue);
+  document.getElementById('wacc').value = originalWaccDom;
+  document.getElementById('shipStartYear').value = originalShipStartYearDom;
+  readSettings();
+
+  state.sensitivity = { paramKey: paramKey, outputKey: outputKey, low: low, high: high, steps: steps, points: points };
+  renderSensitivityChart(points, outputKey);
+  // Restore the other tabs' displayed values, since we mutated global state transiently.
+  renderCostTable();
+  renderOps();
+  renderResults();
+  updateSaveButtonDirtyState();
+});
+
+// ── TOOL LOGIC BELOW ──
+document.addEventListener('DOMContentLoaded', function () {
+  if (typeof _INJECTED_CONFIG !== 'undefined') applyConfig(_INJECTED_CONFIG);
+  renderCapexSchedule();
+  renderCostTable();
+  renderOps();
+  _lastSavedSnapshot = JSON.stringify(buildConfigJSON());
+});
+</script>
+</body>
+</html>
