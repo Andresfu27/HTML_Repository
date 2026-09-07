@@ -112,6 +112,36 @@ Returns **metadata, documents (with chunks), and assets together** in one call �
 | `documents` | Array of `{ id, title, source_filename, chunks: [{ id, chunk_index, content }] }` |
 | `assets` | Array of asset objects — `id`, `mime_type`, `original_filename`/`filename`, optional `content_base64` (inline copy — build a data URI directly when present), optional `description` |
 
+### Metadata field guide — interpreting the `metadata` object
+
+Reference for turning the raw `metadata` returned by the two endpoints above into readable labels (e.g. mapping a code to its display value, or knowing which fields are free text vs. bounded). This is about the *shape and controlled values* of the data you already get from GET — it's not a new endpoint.
+
+| Field | Controlled values / notes |
+|---|---|
+| `team_leading` | Hinicio unit — one of `BE, CL, CO, DL, FR, HQ, NL, US` |
+| `legal_entity` | One of `Hinicio SA`, `Hinico France SA` (spelled that way on purpose), `Hinicio Chile SpA`, `Hinicio Colombia SAS`, `Hinicio North America Inc` |
+| `confidentiality` | `Yes` / `No` |
+| `client_name`, `client_display_name`, `client_description`, `study_title`, `reference_title`, `reference_subtitle`, `project_manager`, `client_contact_name`, `client_contact_email` | Free text |
+| `location.country` / `.region` / `.city_or_site` | Free text |
+| `schedule.start_date` / `.end_date` | Date |
+| `display_period` | Free text, e.g. `"2026"` or `"2025-2026"` |
+| `classification.solution_vertical` | One of `[1] Policy & Regulation`, `[2] Engineering & Digital Solutions`, `[3] Investment\|M&A`, `[4] Market & Off-take`, `[5] Other Services` |
+| `classification.type_of_service` | Depends on `solution_vertical` — options share that vertical's bracket number, e.g. `[2]` offers Techno-Economic Assessment, Pre-Feasibility Study (FEL 1), Andrea License, Augmented Consulting, OE/PMO/PMC Support, Project Execution Plan, Other Technical Services. If a tool renders this as a dependent filter, filter by the vertical's bracket number rather than showing every option. |
+| `classification.product_or_sector` / `.pda_workstream` / `.development_stage` | Free text |
+| `commercial.currency` | ISO 4217 code — `EUR`, `USD`, `CLP`, etc. |
+| `commercial.price` / `.vulcain_subco` / `.external_subco` / `.net_revenue_hinicio` / `.working_day_sales_tariff` / `.expense` | Number |
+| `commercial.contract_value_display` | Free text — a publishable rounded value/range, not the raw number |
+| `reference_content.about_project` | Free text, ≤90 words |
+| `reference_content.context` | Free text, ≤100 words |
+| `reference_content.critical_challenges` | String array, ≤5 entries |
+| `reference_content.scope_of_work` | String array, ≤6 entries |
+| `reference_content.impacts_added_value` | String array, ≤5 entries — each reads as *expected* or *achieved*, not blurring the two |
+| `reference_content.project_scale` | Free text, e.g. `"~100 MW electrolysis; ~250 tpd NH3"` |
+| `reference_content.hinicio_role` | Free text, ≤28 words |
+| `reference_content.deliverables` | Array, ≤3 entries — each `{filename, title?, caption?, image_file?}`; `filename` is the exact SharePoint filename, not a paraphrase |
+
+**Displaying vs. validating.** A read-only tool can safely show any value found in these fields as-is, even if it doesn't match the controlled list above — the API doesn't enforce these on write, so occasional drift is possible. Only lean on the controlled-value list to build a filter/label lookup (e.g. a select showing "Engineering & Digital Solutions" instead of raw `[2]`), not to reject or flag data as invalid.
+
 ### GET `projects/{project_code}/metadata/` — lighter detail
 
 Same basic record as above (`id`, `project_code`, `status`, `metadata`, `people`, `created_at`, `updated_at`) but **without** the nested `documents`/`chunks`/`assets`. Prefer this over the full detail endpoint whenever a tool only needs metadata or the team list and not the document/asset payload — it's a materially smaller response.
@@ -194,15 +224,15 @@ Adds the jsonb fields, plus their photo assets:
 | `contact_info` | `{ phone, location, secondary_emails: [] }` |
 | `nationality` | `{ nationality }` or `{ nationalities: [...] }` for dual |
 | `short_bio` | Per-language: `{ en: "...", es: "..." }` |
-| `professional_experience` | Array — `role, employer, start/end date, location, description` (mixes work-history and project engagements) |
+| `professional_experience` | **Object, not an array** — `{ current_role, years_experience, timeline: [{employer, role, period}, ...], key_references: [{title, client}, ...] }`. `timeline` is the work-history list (oldest last); `key_references` is unrelated project-reference text lifted verbatim off a CV slide, not resolved against real project codes — cross-check against `GET people/{email}/projects/` instead of trusting it. A tool that does `person.professional_experience.forEach(...)` will throw (`.forEach is not a function`) — iterate `professional_experience.timeline` instead. |
 | `sectors_of_expertise` | Flat tag array, e.g. `["Hydrogen", "LCA & Carbon Footprint"]` |
-| `education` | Array — `degree, institution, start/end date, location` |
-| `language` | Array — one entry per language, each with CEFR ratings for `listening / reading / spoken_production / spoken_interaction / writing` |
+| `education` | Array — `{ institution, degree, period }`. `period` is a single free-text string (e.g. `"2019"`, `"Since 2023"`), not separate start/end dates; there's no `location`. |
+| `language` | Array — `{ language, rating }`, `rating` a single overall 0–5 integer. **Not** a per-skill CEFR breakdown (no `listening`/`reading`/`spoken_production`/etc. sub-fields exist in real data). |
 | `skills` | Flat string array |
 | `certifications` | Array — `name, issuer, date, expiry` |
 | (assets) | Their photo objects — same shape as project assets: `id, kind, original_filename, mime_type, file_size, description` |
 
-Only `status` is validated server-side (must be exactly `active`/`inactive`/`external`); every other field accepts whatever shape is sent, so a form built against this is the only thing keeping data like `language` entries consistent.
+Only `status` is validated server-side (must be exactly `active`/`inactive`/`external`); every other field is schema-less JSONB — the server accepts and returns whatever shape was last written for it, with no enforced structure at all. The shapes above are what the CV-deck import (`/people/import_cv_deck/`, the only thing populating real records at the time of writing) actually produces, not a guaranteed contract — a hand-written `POST`/`PUT` to `people/{email}/` or `people/{email}/update/` could write something else entirely (e.g. `professional_experience` as a bare array, matching what a naive reading of a field named "professional experience" would suggest). **Don't assume a jsonb field's type** — guard with `Array.isArray(x) ? x : (x?.timeline || [])` (or equivalent) before calling `.forEach`/`.map` on any of `professional_experience`, `education`, `language`, `skills`, or `certifications`, rather than trusting either this table or the field's apparent name.
 
 ### GET `people/{email}/assets/{asset_id}/serve/` — fetch a photo
 
@@ -239,6 +269,10 @@ const projects = await apiCall('GET', 'people/' + encodeURIComponent(email) + '/
 | DELETE | `/people/{email}/assets/{asset_id}/` | Remove one photo |
 
 ---
+
+## Also exists, out of scope here (admin-only writes)
+
+Beyond the per-record POST/DELETE/PUT/PATCH already noted above for context, the API also has four bulk CSV/PPTX import endpoints (`/projects/import_csv/`, `/projects/import_reference_deck/`, `/people/import_cv_deck/`, `/clockify/import/`) and two irreversible bulk-delete endpoints (`/projects/delete_all/`, `/people/delete_all/`, each requiring an exact confirmation string in the body). All of these are gated on `request.admin_view` (the `Admin` field in the auth header, server-validated against the caller's real permission) and are entirely write-side — nothing here changes what a read/populate tool needs to call.
 
 ## Searching chunks/assets and cross-project queries (POST, for context)
 
